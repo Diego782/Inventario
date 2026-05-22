@@ -1,0 +1,128 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ---------- Enums ----------
+
+enum TipoMovimiento {
+  entrada
+  salida
+  merma
+  devolucion
+  ajuste
+  venta
+}
+
+enum MetodoPago {
+  efectivo
+  tarjeta
+  transferencia
+  fiado
+}
+
+enum EstadoVenta {
+  completada
+  pendiente
+  cancelada
+}
+
+// ---------- Tablas ----------
+
+model Categoria {
+  id        String     @id @default(uuid()) @db.Char(36)
+  nombre    String     @unique @db.VarChar(80)
+  creado_en DateTime   @default(now())
+  productos Producto[]
+
+  @@map("categorias")
+}
+
+model Producto {
+  id             String            @id @default(uuid()) @db.Char(36)
+  sku            String            @unique @db.VarChar(32)
+  codigo_barras  String?           @unique @db.VarChar(48)
+  nombre         String            @db.VarChar(160)
+  categoria_id   String?           @db.Char(36)
+  categoria      Categoria?        @relation(fields: [categoria_id], references: [id])
+  precio_compra  Decimal           @default(0) @db.Decimal(12, 2)
+  precio_venta   Decimal           @db.Decimal(12, 2)
+  stock_actual   Int               @default(0)
+  stock_minimo   Int               @default(0)
+  unidad         String            @default("unidad") @db.VarChar(16)
+  activo         Boolean           @default(true)
+  creado_en      DateTime          @default(now())
+  actualizado_en DateTime          @updatedAt
+
+  movimientos MovimientoStock[]
+  venta_items VentaItem[]
+
+  @@index([categoria_id])
+  @@index([activo, stock_actual])
+  @@map("productos")
+}
+
+model MovimientoStock {
+  id               String         @id @default(uuid()) @db.Char(36)
+  producto_id      String         @db.Char(36)
+  producto         Producto       @relation(fields: [producto_id], references: [id])
+  tipo             TipoMovimiento
+  cantidad         Int
+  stock_resultante Int
+  motivo           String?        @db.VarChar(240)
+  usuario_id       String?        @db.Char(36)
+  referencia_id    String?        @db.Char(36)
+  creado_en        DateTime       @default(now())
+
+  @@index([producto_id, creado_en])
+  @@index([referencia_id])
+  @@map("movimientos_stock")
+}
+
+model Venta {
+  id          String      @id @default(uuid()) @db.Char(36)
+  folio       String      @unique @db.VarChar(24)
+  subtotal    Decimal     @db.Decimal(12, 2)
+  impuesto    Decimal     @db.Decimal(12, 2)
+  total       Decimal     @db.Decimal(12, 2)
+  metodo_pago MetodoPago
+  fiador_id   String?     @db.Char(36)
+  usuario_id  String?     @db.Char(36)
+  estado      EstadoVenta @default(completada)
+  creado_en   DateTime    @default(now())
+
+  items VentaItem[]
+
+  @@index([creado_en])
+  @@index([metodo_pago, creado_en])
+  @@index([fiador_id])
+  @@map("ventas")
+}
+
+model VentaItem {
+  id              String   @id @default(uuid()) @db.Char(36)
+  venta_id        String   @db.Char(36)
+  venta           Venta    @relation(fields: [venta_id], references: [id], onDelete: Cascade)
+  producto_id     String   @db.Char(36)
+  producto        Producto @relation(fields: [producto_id], references: [id])
+  cantidad        Int
+  precio_unitario Decimal  @db.Decimal(12, 2)
+  subtotal_linea  Decimal  @db.Decimal(12, 2)
+
+  @@index([venta_id])
+  @@index([producto_id])
+  @@map("venta_items")
+}
+
+model Configuracion {
+  clave          String   @id @db.VarChar(64)
+  valor          String   @db.VarChar(255)
+  actualizado_en DateTime @updatedAt
+
+  @@map("configuracion")
+}

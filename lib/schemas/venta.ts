@@ -1,0 +1,38 @@
+import { z } from "zod"
+
+export const crearVentaItemSchema = z.object({
+  producto_id: z.string().uuid("ID de producto inválido"),
+  cantidad: z.number().int().positive("La cantidad debe ser un entero positivo"),
+  precio_unitario: z.number().nonnegative("El precio unitario no puede ser negativo"),
+})
+
+export const crearVentaSchema = z
+  .object({
+    items: z
+      .array(crearVentaItemSchema)
+      .min(1, "La venta debe tener al menos un ítem"),
+    metodo_pago: z.enum(["efectivo", "tarjeta", "transferencia", "fiado"], {
+      errorMap: () => ({ message: "Método de pago inválido" }),
+    }),
+    monto_recibido: z.number().nonnegative().optional(),
+    fiador_id: z.string().uuid("ID de fiador inválido").optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.metodo_pago === "fiado" && !v.fiador_id) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["fiador_id"],
+        message: "Se requiere seleccionar un fiador para venta fiada",
+      })
+    }
+    if (v.metodo_pago === "efectivo" && v.monto_recibido === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["monto_recibido"],
+        message: "El monto recibido es obligatorio para pago en efectivo",
+      })
+    }
+  })
+
+export type CrearVentaInput = z.infer<typeof crearVentaSchema>
+export type CrearVentaItemInput = z.infer<typeof crearVentaItemSchema>

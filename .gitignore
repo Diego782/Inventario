@@ -1,0 +1,26 @@
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+.vercel/
+next.user-config.*
+
+# Entorno local
+.env
+.env.local
+.env.*.local
+
+# Prisma
+prisma/migrations/dev.db
+prisma/migrations/dev.db-journal
+
+# Docker volumes (no versionar datos locales)
+mysql-data/
+
+# Common ignores
+node_modules
+.next/
+.DS_Store
+/lib/generated/prisma

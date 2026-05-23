@@ -80,7 +80,12 @@ async function generarHtmlEtiquetas(opts: {
 <head>
   <meta charset="utf-8" />
   <style>
-    html, body { margin: 0; padding: 0; background: white; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: white;
+      width: ${anchoMm}mm;
+    }
     * { box-sizing: border-box; }
     @page {
       size: ${anchoMm}mm ${altoMm}mm portrait;
@@ -97,10 +102,6 @@ async function generarHtmlEtiquetas(opts: {
       overflow: hidden;
       page-break-inside: avoid;
       break-inside: avoid;
-    }
-    .etiqueta:not(:last-of-type) {
-      page-break-after: always;
-      break-after: page;
     }
     .nombre {
       font-family: Helvetica, Arial, sans-serif;

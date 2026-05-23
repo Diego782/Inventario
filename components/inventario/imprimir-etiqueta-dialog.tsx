@@ -75,32 +75,27 @@ export function ImprimirEtiquetaDialog({
         return
       }
 
-      // Si el backend respondió con PDF, abrir ventana e imprimir automáticamente
+      // Si el backend respondió con HTML, abrir en ventana nueva — el HTML llama
+      // window.print() automáticamente con @page size correcto para el sticker
+      if (contentType.includes("text/html")) {
+        const html = await res.text()
+        const win = window.open("", "_blank")
+        if (win) {
+          win.document.write(html)
+          win.document.close()
+        } else {
+          toast.info("Permite las ventanas emergentes para imprimir.")
+        }
+        onClose()
+        return
+      }
+
+      // PDF fallback (cuando hay impresora configurada en el servidor)
       if (contentType.includes("application/pdf")) {
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
-
-        const win = window.open(url, "_blank")
-        if (win) {
-          win.onload = () => {
-            win.focus()
-            win.print()
-            // No cerramos la ventana — el usuario la cierra después de imprimir
-            // Liberar el blob URL después de un tiempo prudente
-            setTimeout(() => URL.revokeObjectURL(url), 60_000)
-          }
-          // Fallback por si onload no dispara
-          setTimeout(() => {
-            win.focus()
-            win.print()
-            setTimeout(() => URL.revokeObjectURL(url), 60_000)
-          }, 1500)
-        } else {
-          // Popup bloqueado — abrir el PDF directamente
-          window.open(url, "_blank")
-          toast.info("Abre el PDF y usa Cmd+P para imprimir.")
-        }
-
+        window.open(url, "_blank")
+        setTimeout(() => URL.revokeObjectURL(url), 60_000)
         onClose()
         return
       }

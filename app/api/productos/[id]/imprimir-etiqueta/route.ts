@@ -160,7 +160,113 @@ async function generarPdfEtiquetas(opts: {
   return await pdf.save()
 }
 
-async function leerDimensionesEtiqueta(): Promise<{ anchoMm: number; altoMm: number }> {
+async function generarHtmlEtiquetas(opts: {
+  nombre: string
+  codigoBarras: string | null
+  precio: number
+  anchoMm: number
+  altoMm: number
+  cantidad: number
+}): Promise<string> {
+  const { nombre, codigoBarras, precio, anchoMm, altoMm, cantidad } = opts
+
+  const precioStr = new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  }).format(precio)
+
+  let barcodeBase64 = ""
+  if (codigoBarras) {
+    try {
+      const formato = codigoBarras.length === 13 ? "ean13" : "code128"
+      const png = await bwipjs.toBuffer({
+        bcid: formato,
+        text: codigoBarras,
+        scale: 3,
+        height: 12,
+        includetext: true,
+        textxalign: "center",
+        textsize: 8,
+      })
+      barcodeBase64 = `data:image/png;base64,${png.toString("base64")}`
+    } catch {
+      barcodeBase64 = ""
+    }
+  }
+
+  const etiqueta = `
+    <div class="etiqueta">
+      <p class="nombre">${nombre.replace(/</g, "&lt;")}</p>
+      ${barcodeBase64
+        ? `<img class="barcode" src="${barcodeBase64}" alt="${codigoBarras}" />`
+        : codigoBarras
+          ? `<p class="codigo-texto">${codigoBarras}</p>`
+          : ""}
+      <p class="precio">${precioStr}</p>
+    </div>`
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @page {
+      size: ${anchoMm}mm ${altoMm}mm;
+      margin: 0;
+    }
+    body { background: white; }
+    .etiqueta {
+      width: ${anchoMm}mm;
+      height: ${altoMm}mm;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5mm;
+      page-break-after: always;
+      page-break-inside: avoid;
+      overflow: hidden;
+    }
+    .etiqueta:last-child { page-break-after: avoid; }
+    .nombre {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 8pt;
+      font-weight: bold;
+      text-align: center;
+      width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 1mm;
+    }
+    .barcode {
+      max-width: 100%;
+      height: auto;
+    }
+    .codigo-texto {
+      font-family: monospace;
+      font-size: 7pt;
+      color: #444;
+    }
+    .precio {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 10pt;
+      font-weight: bold;
+      margin-top: 1.5mm;
+    }
+  </style>
+</head>
+<body>
+  ${Array.from({ length: cantidad }).map(() => etiqueta).join("")}
+  <script>
+    window.onload = function() {
+      window.print();
+    };
+  </script>
+</body>
+</html>`
+}(): Promise<{ anchoMm: number; altoMm: number }> {
   const filas = await prisma.configuracion.findMany({
     where: { clave: { in: ["etiqueta_ancho_mm", "etiqueta_alto_mm"] } },
   })
@@ -195,14 +301,20 @@ export async function POST(req: NextRequest, { params }: Params) {
 
       const impresora = process.env.PRINTER_NAME?.trim()
 
-      // Si no hay impresora configurada, devolver el PDF para que el cliente lo descargue/imprima
+      // Si no hay impresora configurada, devolver HTML con @page size correcto
+      // para que el navegador imprima directamente con el tamaño del sticker
       if (!impresora) {
-        return new Response(pdfBytes as BodyInit, {
+        const html = await generarHtmlEtiquetas({
+          nombre: producto.nombre,
+          codigoBarras: producto.codigo_barras,
+          precio: Number(producto.precio_venta),
+          anchoMm,
+          altoMm,
+          cantidad: input.cantidad,
+        })
+        return new Response(html, {
           status: 200,
-          headers: {
-            "Content-Type": "application/pdf",
-            "Content-Disposition": `inline; filename="etiqueta-${producto.sku}.pdf"`,
-          },
+          headers: { "Content-Type": "text/html; charset=utf-8" },
         })
       }
 

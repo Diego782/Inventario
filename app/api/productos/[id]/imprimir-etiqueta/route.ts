@@ -87,7 +87,7 @@ async function generarHtmlEtiquetas(opts: {
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     @page {
-      size: ${anchoMm}mm ${altoMm}mm;
+      size: ${anchoMm}mm ${altoMm}mm portrait;
       margin: 0;
     }
     body { background: white; }

@@ -75,13 +75,39 @@ export function ImprimirEtiquetaDialog({
         return
       }
 
-      // Si el backend respondió con PDF, abrirlo para imprimir manualmente
-      // (esto ocurre cuando PRINTER_NAME no está configurado).
+      // Si el backend respondió con PDF, abrir ventana oculta e imprimir automáticamente
       if (contentType.includes("application/pdf")) {
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
-        window.open(url, "_blank")
-        toast.info("Etiqueta generada. Configura PRINTER_NAME para impresión directa.")
+
+        const win = window.open(url, "_blank", "width=1,height=1,left=-1000,top=-1000")
+        if (win) {
+          win.onload = () => {
+            win.focus()
+            win.print()
+            // Cerrar después de que el diálogo de impresión se abra
+            setTimeout(() => {
+              win.close()
+              URL.revokeObjectURL(url)
+            }, 1000)
+          }
+          // Fallback por si onload no dispara (algunos navegadores)
+          setTimeout(() => {
+            if (!win.closed) {
+              win.focus()
+              win.print()
+              setTimeout(() => {
+                win.close()
+                URL.revokeObjectURL(url)
+              }, 1000)
+            }
+          }, 2000)
+        } else {
+          // Si el navegador bloqueó el popup, abrir el PDF normalmente
+          window.open(url, "_blank")
+          toast.info("Si el PDF no se imprimió, usa Cmd+P en la ventana que se abrió.")
+        }
+
         onClose()
         return
       }

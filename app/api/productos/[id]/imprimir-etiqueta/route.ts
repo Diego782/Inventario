@@ -9,7 +9,7 @@ import { z } from "zod"
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
 import bwipjs from "bwip-js"
 import { prisma } from "@/lib/db"
-import { ok, errorNoEncontrado, errorPeticion, errorServidor } from "@/lib/api/respuestas"
+import { ok, errorNoEncontrado, errorServidor } from "@/lib/api/respuestas"
 import { mapPrismaError } from "@/lib/api/errores"
 import { withValidation } from "@/lib/api/with-validation"
 
@@ -21,7 +21,7 @@ const imprimirSchema = z.object({
 
 type Params = { params: Promise<{ id: string }> }
 
-const MM_TO_PT = 2.834645669 // 1 mm = 2.834645... pt
+const MM_TO_PT = 2.834645669
 
 function formatearPrecio(valor: number): string {
   return new Intl.NumberFormat("es-MX", {
@@ -43,123 +43,7 @@ async function generarBarcodePNG(codigo: string): Promise<Buffer> {
   })
 }
 
-async function generarPdfEtiquetas(opts: {
-  nombre: string
-  codigoBarras: string | null
-  precio: number
-  anchoMm: number
-  altoMm: number
-  cantidad: number
-}): Promise<Uint8Array> {
-  const { nombre, codigoBarras, precio, anchoMm, altoMm, cantidad } = opts
-
-  const anchoPt = anchoMm * MM_TO_PT
-  const altoPt = altoMm * MM_TO_PT
-
-  const pdf = await PDFDocument.create()
-  const fontRegular = await pdf.embedFont(StandardFonts.Helvetica)
-  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold)
-
-  let barcodeImage: Awaited<ReturnType<typeof pdf.embedPng>> | null = null
-  if (codigoBarras) {
-    try {
-      const png = await generarBarcodePNG(codigoBarras)
-      barcodeImage = await pdf.embedPng(png)
-    } catch {
-      barcodeImage = null
-    }
-  }
-
-  const precioStr = formatearPrecio(precio)
-
-  for (let i = 0; i < cantidad; i++) {
-    const page = pdf.addPage([anchoPt, altoPt])
-
-    // --- Nombre del producto (truncado al ancho) ---
-    const fontSizeNombre = 8
-    let nombreTruncado = nombre
-    const maxNombreWidth = anchoPt - 4 * MM_TO_PT
-    while (
-      fontBold.widthOfTextAtSize(nombreTruncado, fontSizeNombre) > maxNombreWidth &&
-      nombreTruncado.length > 1
-    ) {
-      nombreTruncado = nombreTruncado.slice(0, -1)
-    }
-    if (nombreTruncado !== nombre) {
-      while (
-        fontBold.widthOfTextAtSize(nombreTruncado + "…", fontSizeNombre) > maxNombreWidth &&
-        nombreTruncado.length > 1
-      ) {
-        nombreTruncado = nombreTruncado.slice(0, -1)
-      }
-      nombreTruncado += "…"
-    }
-    const nombreWidth = fontBold.widthOfTextAtSize(nombreTruncado, fontSizeNombre)
-    const nombreY = altoPt - 2 * MM_TO_PT - fontSizeNombre
-    page.drawText(nombreTruncado, {
-      x: (anchoPt - nombreWidth) / 2,
-      y: nombreY,
-      size: fontSizeNombre,
-      font: fontBold,
-      color: rgb(0, 0, 0),
-    })
-
-    // --- Código de barras ---
-    let barcodeBottomY = nombreY
-    if (barcodeImage) {
-      const margenLateral = 3 * MM_TO_PT
-      const barcodeMaxWidth = anchoPt - 2 * margenLateral
-      const altoDisponible = altoPt - 4 * MM_TO_PT - 4 * MM_TO_PT // dejar espacio para nombre y precio
-      const ratio = barcodeImage.width / barcodeImage.height
-      let barcodeW = barcodeMaxWidth
-      let barcodeH = barcodeW / ratio
-      if (barcodeH > altoDisponible) {
-        barcodeH = altoDisponible
-        barcodeW = barcodeH * ratio
-      }
-      const barcodeX = (anchoPt - barcodeW) / 2
-      const fontSizePrecio = 10
-      const precioY = 4 * MM_TO_PT
-      const espacioBarcode = nombreY - 1 * MM_TO_PT - (precioY + fontSizePrecio + 1 * MM_TO_PT)
-      if (barcodeH > espacioBarcode) {
-        barcodeH = espacioBarcode
-        barcodeW = barcodeH * ratio
-      }
-      const barcodeY = precioY + fontSizePrecio + 1 * MM_TO_PT + (espacioBarcode - barcodeH) / 2
-      page.drawImage(barcodeImage, {
-        x: (anchoPt - barcodeW) / 2,
-        y: barcodeY,
-        width: barcodeW,
-        height: barcodeH,
-      })
-      barcodeBottomY = barcodeY
-    } else if (codigoBarras) {
-      const fontSize = 7
-      const w = fontRegular.widthOfTextAtSize(codigoBarras, fontSize)
-      page.drawText(codigoBarras, {
-        x: (anchoPt - w) / 2,
-        y: altoPt / 2,
-        size: fontSize,
-        font: fontRegular,
-        color: rgb(0.4, 0.4, 0.4),
-      })
-    }
-
-    // --- Precio ---
-    const fontSizePrecio = 10
-    const precioWidth = fontBold.widthOfTextAtSize(precioStr, fontSizePrecio)
-    page.drawText(precioStr, {
-      x: (anchoPt - precioWidth) / 2,
-      y: 4 * MM_TO_PT,
-      size: fontSizePrecio,
-      font: fontBold,
-      color: rgb(0, 0, 0),
-    })
-  }
-
-  return await pdf.save()
-}
-
+// Genera HTML con @page size exacto — el navegador imprime con el tamaño correcto
 async function generarHtmlEtiquetas(opts: {
   nombre: string
   codigoBarras: string | null
@@ -170,33 +54,22 @@ async function generarHtmlEtiquetas(opts: {
 }): Promise<string> {
   const { nombre, codigoBarras, precio, anchoMm, altoMm, cantidad } = opts
 
-  const precioStr = new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-  }).format(precio)
+  const precioStr = formatearPrecio(precio)
+  const nombreEscapado = nombre.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 
   let barcodeBase64 = ""
   if (codigoBarras) {
     try {
-      const formato = codigoBarras.length === 13 ? "ean13" : "code128"
-      const png = await bwipjs.toBuffer({
-        bcid: formato,
-        text: codigoBarras,
-        scale: 3,
-        height: 12,
-        includetext: true,
-        textxalign: "center",
-        textsize: 8,
-      })
+      const png = await generarBarcodePNG(codigoBarras)
       barcodeBase64 = `data:image/png;base64,${png.toString("base64")}`
     } catch {
       barcodeBase64 = ""
     }
   }
 
-  const etiqueta = `
+  const etiquetaHtml = `
     <div class="etiqueta">
-      <p class="nombre">${nombre.replace(/</g, "&lt;")}</p>
+      <p class="nombre">${nombreEscapado}</p>
       ${barcodeBase64
         ? `<img class="barcode" src="${barcodeBase64}" alt="${codigoBarras}" />`
         : codigoBarras
@@ -204,6 +77,8 @@ async function generarHtmlEtiquetas(opts: {
           : ""}
       <p class="precio">${precioStr}</p>
     </div>`
+
+  const etiquetas = Array.from({ length: cantidad }).map(() => etiquetaHtml).join("")
 
   return `<!DOCTYPE html>
 <html>
@@ -240,15 +115,8 @@ async function generarHtmlEtiquetas(opts: {
       text-overflow: ellipsis;
       margin-bottom: 1mm;
     }
-    .barcode {
-      max-width: 100%;
-      height: auto;
-    }
-    .codigo-texto {
-      font-family: monospace;
-      font-size: 7pt;
-      color: #444;
-    }
+    .barcode { max-width: 100%; height: auto; }
+    .codigo-texto { font-family: monospace; font-size: 7pt; color: #444; }
     .precio {
       font-family: Helvetica, Arial, sans-serif;
       font-size: 10pt;
@@ -258,23 +126,126 @@ async function generarHtmlEtiquetas(opts: {
   </style>
 </head>
 <body>
-  ${Array.from({ length: cantidad }).map(() => etiqueta).join("")}
-  <script>
-    window.onload = function() {
-      window.print();
-    };
-  </script>
+  ${etiquetas}
+  <script>window.onload = function() { window.print(); };</script>
 </body>
 </html>`
-}(): Promise<{ anchoMm: number; altoMm: number }> {
+}
+
+// Genera PDF con dimensiones exactas (usado cuando hay impresora CUPS configurada)
+async function generarPdfEtiquetas(opts: {
+  nombre: string
+  codigoBarras: string | null
+  precio: number
+  anchoMm: number
+  altoMm: number
+  cantidad: number
+}): Promise<Uint8Array> {
+  const { nombre, codigoBarras, precio, anchoMm, altoMm, cantidad } = opts
+
+  const anchoPt = anchoMm * MM_TO_PT
+  const altoPt = altoMm * MM_TO_PT
+
+  const pdf = await PDFDocument.create()
+  const fontRegular = await pdf.embedFont(StandardFonts.Helvetica)
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold)
+
+  let barcodeImage: Awaited<ReturnType<typeof pdf.embedPng>> | null = null
+  if (codigoBarras) {
+    try {
+      const png = await generarBarcodePNG(codigoBarras)
+      barcodeImage = await pdf.embedPng(png)
+    } catch {
+      barcodeImage = null
+    }
+  }
+
+  const precioStr = formatearPrecio(precio)
+
+  for (let i = 0; i < cantidad; i++) {
+    const page = pdf.addPage([anchoPt, altoPt])
+
+    const fontSizeNombre = 8
+    let nombreTruncado = nombre
+    const maxNombreWidth = anchoPt - 4 * MM_TO_PT
+    while (
+      fontBold.widthOfTextAtSize(nombreTruncado, fontSizeNombre) > maxNombreWidth &&
+      nombreTruncado.length > 1
+    ) {
+      nombreTruncado = nombreTruncado.slice(0, -1)
+    }
+    if (nombreTruncado !== nombre) {
+      while (
+        fontBold.widthOfTextAtSize(nombreTruncado + "…", fontSizeNombre) > maxNombreWidth &&
+        nombreTruncado.length > 1
+      ) {
+        nombreTruncado = nombreTruncado.slice(0, -1)
+      }
+      nombreTruncado += "…"
+    }
+    const nombreWidth = fontBold.widthOfTextAtSize(nombreTruncado, fontSizeNombre)
+    const nombreY = altoPt - 2 * MM_TO_PT - fontSizeNombre
+    page.drawText(nombreTruncado, {
+      x: (anchoPt - nombreWidth) / 2,
+      y: nombreY,
+      size: fontSizeNombre,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    })
+
+    if (barcodeImage) {
+      const fontSizePrecio = 10
+      const precioY = 4 * MM_TO_PT
+      const espacioBarcode = nombreY - 1 * MM_TO_PT - (precioY + fontSizePrecio + 1 * MM_TO_PT)
+      const ratio = barcodeImage.width / barcodeImage.height
+      let barcodeW = anchoPt - 6 * MM_TO_PT
+      let barcodeH = barcodeW / ratio
+      if (barcodeH > espacioBarcode) {
+        barcodeH = espacioBarcode
+        barcodeW = barcodeH * ratio
+      }
+      const barcodeY = precioY + fontSizePrecio + 1 * MM_TO_PT + (espacioBarcode - barcodeH) / 2
+      page.drawImage(barcodeImage, {
+        x: (anchoPt - barcodeW) / 2,
+        y: barcodeY,
+        width: barcodeW,
+        height: barcodeH,
+      })
+    } else if (codigoBarras) {
+      const fontSize = 7
+      const w = fontRegular.widthOfTextAtSize(codigoBarras, fontSize)
+      page.drawText(codigoBarras, {
+        x: (anchoPt - w) / 2,
+        y: altoPt / 2,
+        size: fontSize,
+        font: fontRegular,
+        color: rgb(0.4, 0.4, 0.4),
+      })
+    }
+
+    const fontSizePrecio = 10
+    const precioWidth = fontBold.widthOfTextAtSize(precioStr, fontSizePrecio)
+    page.drawText(precioStr, {
+      x: (anchoPt - precioWidth) / 2,
+      y: 4 * MM_TO_PT,
+      size: fontSizePrecio,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    })
+  }
+
+  return await pdf.save()
+}
+
+async function leerDimensionesEtiqueta(): Promise<{ anchoMm: number; altoMm: number }> {
   const filas = await prisma.configuracion.findMany({
     where: { clave: { in: ["etiqueta_ancho_mm", "etiqueta_alto_mm"] } },
   })
   const mapa: Record<string, string> = {}
   for (const f of filas) mapa[f.clave] = f.valor
   return {
-    anchoMm: mapa.etiqueta_ancho_mm ? parseInt(mapa.etiqueta_ancho_mm, 10) : 50,
-    altoMm: mapa.etiqueta_alto_mm ? parseInt(mapa.etiqueta_alto_mm, 10) : 30,
+    anchoMm: mapa.etiqueta_ancho_mm ? parseInt(mapa.etiqueta_ancho_mm, 10) : 57,
+    altoMm: mapa.etiqueta_alto_mm ? parseInt(mapa.etiqueta_alto_mm, 10) : 40,
   }
 }
 
@@ -289,20 +260,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
 
       const { anchoMm, altoMm } = await leerDimensionesEtiqueta()
-
-      const pdfBytes = await generarPdfEtiquetas({
-        nombre: producto.nombre,
-        codigoBarras: producto.codigo_barras,
-        precio: Number(producto.precio_venta),
-        anchoMm,
-        altoMm,
-        cantidad: input.cantidad,
-      })
-
       const impresora = process.env.PRINTER_NAME?.trim()
 
-      // Si no hay impresora configurada, devolver HTML con @page size correcto
-      // para que el navegador imprima directamente con el tamaño del sticker
+      // Sin impresora: devolver HTML con @page size correcto para impresión desde el navegador
       if (!impresora) {
         const html = await generarHtmlEtiquetas({
           nombre: producto.nombre,
@@ -318,7 +278,16 @@ export async function POST(req: NextRequest, { params }: Params) {
         })
       }
 
-      // Guardar PDF temporal y enviarlo a la impresora con `lp`
+      // Con impresora CUPS: generar PDF y enviarlo con lp
+      const pdfBytes = await generarPdfEtiquetas({
+        nombre: producto.nombre,
+        codigoBarras: producto.codigo_barras,
+        precio: Number(producto.precio_venta),
+        anchoMm,
+        altoMm,
+        cantidad: input.cantidad,
+      })
+
       const tmpFile = join(tmpdir(), `etiqueta-${randomUUID()}.pdf`)
       await writeFile(tmpFile, pdfBytes)
 
@@ -330,10 +299,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         return errorServidor("IMPRESION_FALLIDA", 500)
       }
 
-      // Limpiar archivo temporal después de un tiempo prudente
-      setTimeout(() => {
-        unlink(tmpFile).catch(() => {})
-      }, 30_000)
+      setTimeout(() => unlink(tmpFile).catch(() => {}), 30_000)
 
       return ok({ enviado: true, cantidad: input.cantidad, impresora })
     } catch (e) {

@@ -95,14 +95,12 @@ async function generarHtmlEtiquetas(opts: {
       justify-content: center;
       padding: 1mm;
       overflow: hidden;
-      page-break-after: always;
-      break-after: page;
       page-break-inside: avoid;
       break-inside: avoid;
     }
-    .etiqueta:last-of-type {
-      page-break-after: auto;
-      break-after: auto;
+    .etiqueta:not(:last-of-type) {
+      page-break-after: always;
+      break-after: page;
     }
     .nombre {
       font-family: Helvetica, Arial, sans-serif;

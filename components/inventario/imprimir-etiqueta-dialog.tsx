@@ -75,37 +75,30 @@ export function ImprimirEtiquetaDialog({
         return
       }
 
-      // Si el backend respondió con PDF, abrir ventana oculta e imprimir automáticamente
+      // Si el backend respondió con PDF, abrir ventana e imprimir automáticamente
       if (contentType.includes("application/pdf")) {
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
 
-        const win = window.open(url, "_blank", "width=1,height=1,left=-1000,top=-1000")
+        const win = window.open(url, "_blank")
         if (win) {
           win.onload = () => {
             win.focus()
             win.print()
-            // Cerrar después de que el diálogo de impresión se abra
-            setTimeout(() => {
-              win.close()
-              URL.revokeObjectURL(url)
-            }, 1000)
+            // No cerramos la ventana — el usuario la cierra después de imprimir
+            // Liberar el blob URL después de un tiempo prudente
+            setTimeout(() => URL.revokeObjectURL(url), 60_000)
           }
-          // Fallback por si onload no dispara (algunos navegadores)
+          // Fallback por si onload no dispara
           setTimeout(() => {
-            if (!win.closed) {
-              win.focus()
-              win.print()
-              setTimeout(() => {
-                win.close()
-                URL.revokeObjectURL(url)
-              }, 1000)
-            }
-          }, 2000)
+            win.focus()
+            win.print()
+            setTimeout(() => URL.revokeObjectURL(url), 60_000)
+          }, 1500)
         } else {
-          // Si el navegador bloqueó el popup, abrir el PDF normalmente
+          // Popup bloqueado — abrir el PDF directamente
           window.open(url, "_blank")
-          toast.info("Si el PDF no se imprimió, usa Cmd+P en la ventana que se abrió.")
+          toast.info("Abre el PDF y usa Cmd+P para imprimir.")
         }
 
         onClose()

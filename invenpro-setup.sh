@@ -38,7 +38,7 @@ echo "Esperando que MySQL arranque..."
 sleep 30
 
 # Migraciones, seed y build
-sudo -u ec2-user bash -c "cd $APP_DIR && pnpm db:migrate && pnpm db:seed && pnpm build"
+sudo -u ec2-user bash -c "cd $APP_DIR && pnpm exec prisma generate && pnpm db:migrate && pnpm db:seed && pnpm build"
 
 # Servicio systemd
 cat > /etc/systemd/system/invenpro.service << 'SVCEOF'

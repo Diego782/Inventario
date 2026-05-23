@@ -67,16 +67,11 @@ async function generarHtmlEtiquetas(opts: {
     }
   }
 
-  const etiquetaHtml = `
-    <div class="etiqueta">
-      <p class="nombre">${nombreEscapado}</p>
-      ${barcodeBase64
-        ? `<img class="barcode" src="${barcodeBase64}" alt="${codigoBarras}" />`
+  const etiquetaHtml = `<div class="etiqueta"><p class="nombre">${nombreEscapado}</p>${barcodeBase64
+        ? `<img class="barcode" src="${barcodeBase64}" alt="${codigoBarras ?? ""}" />`
         : codigoBarras
           ? `<p class="codigo-texto">${codigoBarras}</p>`
-          : ""}
-      <p class="precio">${precioStr}</p>
-    </div>`
+          : ""}<p class="precio">${precioStr}</p></div>`
 
   const etiquetas = Array.from({ length: cantidad }).map(() => etiquetaHtml).join("")
 
@@ -85,12 +80,12 @@ async function generarHtmlEtiquetas(opts: {
 <head>
   <meta charset="utf-8" />
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: white; }
+    * { box-sizing: border-box; }
     @page {
       size: ${anchoMm}mm ${altoMm}mm portrait;
       margin: 0;
     }
-    body { background: white; }
     .etiqueta {
       width: ${anchoMm}mm;
       height: ${altoMm}mm;
@@ -98,12 +93,17 @@ async function generarHtmlEtiquetas(opts: {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 1.5mm;
-      page-break-after: always;
-      page-break-inside: avoid;
+      padding: 1mm;
       overflow: hidden;
+      page-break-after: always;
+      break-after: page;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
-    .etiqueta:last-child { page-break-after: avoid; }
+    .etiqueta:last-of-type {
+      page-break-after: auto;
+      break-after: auto;
+    }
     .nombre {
       font-family: Helvetica, Arial, sans-serif;
       font-size: 8pt;
@@ -113,22 +113,35 @@ async function generarHtmlEtiquetas(opts: {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      margin-bottom: 1mm;
+      margin: 0 0 0.5mm 0;
+      line-height: 1.1;
+      flex-shrink: 0;
     }
-    .barcode { max-width: 100%; height: auto; }
-    .codigo-texto { font-family: monospace; font-size: 7pt; color: #444; }
+    .barcode {
+      max-width: 95%;
+      max-height: ${Math.max(altoMm - 14, 8)}mm;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      display: block;
+    }
+    .codigo-texto {
+      font-family: monospace;
+      font-size: 7pt;
+      color: #444;
+      margin: 0;
+    }
     .precio {
       font-family: Helvetica, Arial, sans-serif;
       font-size: 10pt;
       font-weight: bold;
-      margin-top: 1.5mm;
+      margin: 0.5mm 0 0 0;
+      line-height: 1.1;
+      flex-shrink: 0;
     }
   </style>
 </head>
-<body>
-  ${etiquetas}
-  <script>window.onload = function() { window.print(); };</script>
-</body>
+<body>${etiquetas}</body>
 </html>`
 }
 

@@ -75,31 +75,80 @@ export function ImprimirEtiquetaDialog({
         return
       }
 
-      // Si el backend respondió con HTML, abrir en ventana nueva — el HTML llama
-      // window.print() automáticamente con @page size correcto para el sticker
+      // HTML del backend con @page size correcto — imprimimos vía iframe oculto
       if (contentType.includes("text/html")) {
         const html = await res.text()
-        const win = window.open("", "_blank")
-        if (win) {
-          win.document.write(html)
-          win.document.close()
-        } else {
-          toast.info("Permite las ventanas emergentes para imprimir.")
+        // Quitar el window.print() automático del HTML porque lo dispararemos manualmente
+        const htmlSinAutoprint = html.replace(
+          /<script>window\.onload\s*=\s*function\(\)\s*\{\s*window\.print\(\);\s*\};?<\/script>/,
+          ""
+        )
+
+        // Limpiar iframe previo si existe
+        const previo = document.getElementById("invenpro-print-frame")
+        if (previo) previo.remove()
+
+        const iframe = document.createElement("iframe")
+        iframe.id = "invenpro-print-frame"
+        iframe.style.position = "fixed"
+        iframe.style.right = "0"
+        iframe.style.bottom = "0"
+        iframe.style.width = "0"
+        iframe.style.height = "0"
+        iframe.style.border = "0"
+        iframe.style.visibility = "hidden"
+        document.body.appendChild(iframe)
+
+        const doc = iframe.contentDocument || iframe.contentWindow?.document
+        if (!doc) {
+          toast.error("No se pudo preparar la impresión.")
+          iframe.remove()
+          return
         }
+
+        doc.open()
+        doc.write(htmlSinAutoprint)
+        doc.close()
+
+        // Esperar a que las imágenes (código de barras) carguen antes de imprimir
+        const triggerPrint = () => {
+          try {
+            iframe.contentWindow?.focus()
+            iframe.contentWindow?.print()
+          } catch {
+            toast.error("Error al lanzar la impresión.")
+          } finally {
+            // Quitar el iframe después de un tiempo prudente
+            setTimeout(() => iframe.remove(), 5_000)
+          }
+        }
+
+        const imgs = Array.from(doc.images)
+        if (imgs.length === 0) {
+          triggerPrint()
+        } else {
+          let pendientes = imgs.length
+          const onDone = () => {
+            pendientes -= 1
+            if (pendientes <= 0) triggerPrint()
+          }
+          imgs.forEach((img) => {
+            if (img.complete) {
+              onDone()
+            } else {
+              img.addEventListener("load", onDone, { once: true })
+              img.addEventListener("error", onDone, { once: true })
+            }
+          })
+          // Fallback de seguridad
+          setTimeout(triggerPrint, 1500)
+        }
+
         onClose()
         return
       }
 
-      // PDF fallback (cuando hay impresora configurada en el servidor)
-      if (contentType.includes("application/pdf")) {
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        window.open(url, "_blank")
-        setTimeout(() => URL.revokeObjectURL(url), 60_000)
-        onClose()
-        return
-      }
-
+      // Cuando hay impresora CUPS configurada en el servidor
       toast.success(`${values.cantidad} etiqueta(s) enviada(s) a la impresora.`)
       onClose()
     } catch {

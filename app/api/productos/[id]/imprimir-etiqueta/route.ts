@@ -67,13 +67,18 @@ async function generarHtmlEtiquetas(opts: {
     }
   }
 
-  const etiquetaHtml = `<div class="etiqueta"><p class="nombre">${nombreEscapado}</p>${barcodeBase64
-        ? `<img class="barcode" src="${barcodeBase64}" alt="${codigoBarras ?? ""}" />`
-        : codigoBarras
-          ? `<p class="codigo-texto">${codigoBarras}</p>`
-          : ""}<p class="precio">${precioStr}</p></div>`
+  const etiquetaHtml = `<div class="etiqueta"><p class="nombre">${nombreEscapado}</p>${
+    barcodeBase64
+      ? `<img class="barcode" src="${barcodeBase64}" alt="${codigoBarras ?? ""}" />`
+      : codigoBarras
+        ? `<p class="codigo-texto">${codigoBarras}</p>`
+        : ""
+  }<p class="precio">${precioStr}</p></div>`
 
   const etiquetas = Array.from({ length: cantidad }).map(() => etiquetaHtml).join("")
+
+  // alto 0.5mm menor que el @page para evitar desbordes que generen páginas blancas
+  const etiquetaAltoMm = Math.max(altoMm - 0.5, 1)
 
   return `<!DOCTYPE html>
 <html>
@@ -84,7 +89,6 @@ async function generarHtmlEtiquetas(opts: {
       margin: 0;
       padding: 0;
       background: white;
-      width: ${anchoMm}mm;
     }
     * { box-sizing: border-box; }
     @page {
@@ -93,15 +97,21 @@ async function generarHtmlEtiquetas(opts: {
     }
     .etiqueta {
       width: ${anchoMm}mm;
-      height: ${altoMm}mm;
+      height: ${etiquetaAltoMm}mm;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 1mm;
+      padding: 1mm 1mm 0.5mm 1mm;
       overflow: hidden;
+      page-break-after: always;
+      break-after: page;
       page-break-inside: avoid;
       break-inside: avoid;
+    }
+    .etiqueta:last-child {
+      page-break-after: auto;
+      break-after: auto;
     }
     .nombre {
       font-family: Helvetica, Arial, sans-serif;
@@ -114,7 +124,6 @@ async function generarHtmlEtiquetas(opts: {
       text-overflow: ellipsis;
       margin: 0 0 0.5mm 0;
       line-height: 1.1;
-      flex-shrink: 0;
     }
     .barcode {
       max-width: 95%;
@@ -136,7 +145,6 @@ async function generarHtmlEtiquetas(opts: {
       font-weight: bold;
       margin: 0.5mm 0 0 0;
       line-height: 1.1;
-      flex-shrink: 0;
     }
   </style>
 </head>

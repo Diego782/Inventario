@@ -58,13 +58,15 @@ export async function crearProducto(input: CrearProductoInput): Promise<Producto
       sku: input.sku,
       codigo_barras: codigoBarras,
       nombre: input.nombre,
-      categoria_id: input.categoria_id ?? null,
+      ...(input.categoria_id ? { categoria: { connect: { id: input.categoria_id } } } : {}),
       precio_compra: input.precio_compra ?? 0,
       precio_venta: input.precio_venta,
       stock_actual: input.stock_actual ?? 0,
       stock_minimo: input.stock_minimo ?? 0,
       unidad: input.unidad ?? "unidad",
+      talla: input.talla ?? null,
     },
+    include: { variantes: true },
   })
 }
 
@@ -93,12 +95,18 @@ export async function editarProducto(
       ...(input.sku !== undefined && { sku: input.sku }),
       ...(input.codigo_barras !== undefined && { codigo_barras: input.codigo_barras }),
       ...(input.nombre !== undefined && { nombre: input.nombre }),
-      ...(input.categoria_id !== undefined && { categoria_id: input.categoria_id }),
+      ...(input.categoria_id !== undefined && {
+        categoria: input.categoria_id
+          ? { connect: { id: input.categoria_id } }
+          : { disconnect: true },
+      }),
       ...(input.precio_compra !== undefined && { precio_compra: input.precio_compra }),
       ...(input.precio_venta !== undefined && { precio_venta: input.precio_venta }),
       ...(input.stock_minimo !== undefined && { stock_minimo: input.stock_minimo }),
       ...(input.unidad !== undefined && { unidad: input.unidad }),
+      ...(input.talla !== undefined && { talla: input.talla }),
     },
+    include: { variantes: true },
   })
 }
 
@@ -197,7 +205,7 @@ export async function listarProductos(params: {
   }
 
   const [items, total] = await Promise.all([
-    prisma.producto.findMany({ where, take, skip, orderBy: { nombre: "asc" } }),
+    prisma.producto.findMany({ where, take, skip, orderBy: { nombre: "asc" }, include: { variantes: true } }),
     prisma.producto.count({ where }),
   ])
 

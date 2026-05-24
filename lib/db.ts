@@ -60,6 +60,6 @@ function createPrismaClient(): PrismaClient | null {
 export const prisma: PrismaClient =
   (globalForPrisma.prisma ?? createPrismaClient()) as PrismaClient
 
-if (process.env.NODE_ENV !== "production" && prisma) {
+if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma
 }

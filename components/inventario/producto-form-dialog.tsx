@@ -31,6 +31,10 @@ import {
 import { crearProductoSchema, editarProductoSchema } from "@/lib/schemas/producto"
 import type { ProductoDTO } from "@/lib/api/serializadores"
 import { toastDeError } from "@/lib/mensajes-error"
+import { GestionarCategoriasDialog } from "@/components/inventario/gestionar-categorias-dialog"
+import { GestionarUnidadesDialog } from "@/components/inventario/gestionar-unidades-dialog"
+import { GestionarTallasDialog } from "@/components/inventario/gestionar-tallas-dialog"
+import { Plus } from "lucide-react"
 import type { z } from "zod"
 
 type CrearInput = z.infer<typeof crearProductoSchema>
@@ -54,7 +58,12 @@ export function ProductoFormDialog({
   onGuardado,
 }: ProductoFormDialogProps) {
   const [categorias, setCategorias] = useState<Categoria[]>([])
+  const [unidades, setUnidades] = useState<string[]>([])
+  const [tallas, setTallas] = useState<string[]>([])
   const [guardando, setGuardando] = useState(false)
+  const [gestionarCategorias, setGestionarCategorias] = useState(false)
+  const [gestionarUnidades, setGestionarUnidades] = useState(false)
+  const [gestionarTallas, setGestionarTallas] = useState(false)
 
   const schema = modo === "crear" ? crearProductoSchema : editarProductoSchema
   const form = useForm<CrearInput>({
@@ -69,6 +78,7 @@ export function ProductoFormDialog({
       stock_actual: 0,
       stock_minimo: 0,
       unidad: "unidad",
+      talla: null,
     },
   })
 
@@ -84,6 +94,7 @@ export function ProductoFormDialog({
         precio_venta: producto.precio_venta,
         stock_minimo: producto.stock_minimo,
         unidad: producto.unidad,
+        talla: producto.talla ?? null,
       })
     } else if (modo === "crear") {
       form.reset({
@@ -96,17 +107,40 @@ export function ProductoFormDialog({
         stock_actual: 0,
         stock_minimo: 0,
         unidad: "unidad",
+        talla: null,
       })
     }
   }, [modo, producto, form, open])
 
   // Cargar categorías
-  useEffect(() => {
-    if (!open) return
+  function cargarCategorias() {
     fetch("/api/categorias")
       .then((r) => r.json())
       .then((data) => setCategorias(Array.isArray(data) ? data : []))
       .catch(() => {})
+  }
+
+  // Cargar unidades
+  function cargarUnidades() {
+    fetch("/api/unidades")
+      .then((r) => r.json())
+      .then((data) => setUnidades(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }
+
+  // Cargar tallas
+  function cargarTallas() {
+    fetch("/api/tallas")
+      .then((r) => r.json())
+      .then((data) => setTallas(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    if (!open) return
+    cargarCategorias()
+    cargarUnidades()
+    cargarTallas()
   }, [open])
 
   async function onSubmit(values: CrearInput) {
@@ -145,6 +179,7 @@ export function ProductoFormDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -207,7 +242,18 @@ export function ProductoFormDialog({
                 name="categoria_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Categoría</FormLabel>
+                    <div className="flex items-center gap-1">
+                      <FormLabel>Categoría</FormLabel>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-5 w-5 rounded-full"
+                        onClick={() => setGestionarCategorias(true)}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                     <Select
                       onValueChange={field.onChange}
                       value={field.value ?? ""}
@@ -235,10 +281,75 @@ export function ProductoFormDialog({
                 name="unidad"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Unidad</FormLabel>
-                    <FormControl>
-                      <Input placeholder="unidad" {...field} />
-                    </FormControl>
+                    <div className="flex items-center gap-1">
+                      <FormLabel>Unidad</FormLabel>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-5 w-5 rounded-full"
+                        onClick={() => setGestionarUnidades(true)}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value ?? "unidad"}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar unidad" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {unidades.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {u}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="talla"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center gap-1">
+                      <FormLabel>Talla</FormLabel>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-5 w-5 rounded-full"
+                        onClick={() => setGestionarTallas(true)}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                    <Select
+                      onValueChange={(v) => field.onChange(v === "__none__" ? null : v)}
+                      value={field.value ?? "__none__"}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sin talla" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sin talla</SelectItem>
+                        {tallas.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -337,5 +448,24 @@ export function ProductoFormDialog({
         </Form>
       </DialogContent>
     </Dialog>
+
+    <GestionarCategoriasDialog
+      open={gestionarCategorias}
+      onClose={() => setGestionarCategorias(false)}
+      onCambio={cargarCategorias}
+    />
+
+    <GestionarUnidadesDialog
+      open={gestionarUnidades}
+      onClose={() => setGestionarUnidades(false)}
+      onCambio={cargarUnidades}
+    />
+
+    <GestionarTallasDialog
+      open={gestionarTallas}
+      onClose={() => setGestionarTallas(false)}
+      onCambio={cargarTallas}
+    />
+    </>
   )
 }

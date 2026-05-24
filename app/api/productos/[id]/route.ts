@@ -12,7 +12,7 @@ type Params = { params: Promise<{ id: string }> }
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const { id } = await params
-    const producto = await prisma.producto.findUnique({ where: { id } })
+    const producto = await prisma.producto.findUnique({ where: { id }, include: { variantes: true } })
 
     if (!producto || !producto.activo) {
       return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")

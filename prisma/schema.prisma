@@ -55,12 +55,14 @@ model Producto {
   stock_actual   Int               @default(0)
   stock_minimo   Int               @default(0)
   unidad         String            @default("unidad") @db.VarChar(16)
+  talla          String?           @db.VarChar(20)
   activo         Boolean           @default(true)
   creado_en      DateTime          @default(now())
   actualizado_en DateTime          @updatedAt
 
   movimientos MovimientoStock[]
   venta_items VentaItem[]
+  variantes   VarianteProducto[]
 
   @@index([categoria_id])
   @@index([activo, stock_actual])
@@ -125,4 +127,17 @@ model Configuracion {
   actualizado_en DateTime @updatedAt
 
   @@map("configuracion")
+}
+
+model VarianteProducto {
+  id            String   @id @default(uuid()) @db.Char(36)
+  producto_id   String   @db.Char(36)
+  producto      Producto @relation(fields: [producto_id], references: [id], onDelete: Cascade)
+  talla         String   @db.VarChar(20)
+  stock_actual  Int      @default(0)
+  codigo_barras String?  @unique @db.VarChar(48)
+
+  @@unique([producto_id, talla])
+  @@index([producto_id])
+  @@map("variantes_producto")
 }

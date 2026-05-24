@@ -172,7 +172,17 @@ export function InventarioTable({ searchTerm, refreshKey = 0, onAccion }: Invent
                   <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
                     <Package className="w-5 h-5 text-muted-foreground" />
                   </div>
-                  <span className="font-medium">{producto.nombre}</span>
+                  <div>
+                    <span className="font-medium">{producto.nombre}</span>
+                    {producto.variantes && producto.variantes.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {producto.variantes.map((v) => `${v.talla}: ${v.stock_actual}`).join(" · ")}
+                      </p>
+                    )}
+                    {!producto.variantes?.length && producto.talla && (
+                      <p className="text-xs text-muted-foreground">Talla: {producto.talla}</p>
+                    )}
+                  </div>
                 </div>
               </TableCell>
               <TableCell className="text-muted-foreground">

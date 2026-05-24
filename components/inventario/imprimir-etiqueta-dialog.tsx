@@ -22,6 +22,14 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Printer } from "lucide-react"
 import { EtiquetaPreview } from "@/components/inventario/etiqueta-preview"
 import type { ProductoDTO } from "@/lib/api/serializadores"
@@ -44,6 +52,8 @@ export function ImprimirEtiquetaDialog({
   onClose,
 }: ImprimirEtiquetaDialogProps) {
   const [imprimiendo, setImprimiendo] = useState(false)
+  const [incluirTalla, setIncluirTalla] = useState(false)
+  const [tallaSeleccionada, setTallaSeleccionada] = useState("")
 
   const form = useForm<CantidadInput>({
     resolver: zodResolver(cantidadSchema),
@@ -60,7 +70,10 @@ export function ImprimirEtiquetaDialog({
       const res = await fetch(`/api/productos/${producto.id}/imprimir-etiqueta`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cantidad: values.cantidad }),
+        body: JSON.stringify({
+          cantidad: values.cantidad,
+          talla: incluirTalla && tallaSeleccionada ? tallaSeleccionada : undefined,
+        }),
       })
 
       const contentType = res.headers.get("Content-Type") ?? ""
@@ -118,8 +131,11 @@ export function ImprimirEtiquetaDialog({
           } catch {
             toast.error("Error al lanzar la impresión.")
           } finally {
-            // Quitar el iframe después de un tiempo prudente
-            setTimeout(() => iframe.remove(), 5_000)
+            // Quitar el iframe después de un tiempo generoso
+            // (el diálogo de impresión puede tardar varios segundos en cerrarse)
+            setTimeout(() => {
+              iframe.remove()
+            }, 30_000)
           }
         }
 
@@ -190,9 +206,40 @@ export function ImprimirEtiquetaDialog({
               )}
             />
 
+            {/* Opción de incluir talla */}
+            {producto.variantes && producto.variantes.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="incluir-talla"
+                    checked={incluirTalla}
+                    onCheckedChange={(v) => {
+                      setIncluirTalla(!!v)
+                      if (!v) setTallaSeleccionada("")
+                    }}
+                  />
+                  <label htmlFor="incluir-talla" className="text-sm cursor-pointer">
+                    Incluir talla en la etiqueta
+                  </label>
+                </div>
+                {incluirTalla && (
+                  <Select value={tallaSeleccionada} onValueChange={setTallaSeleccionada}>
+                    <SelectTrigger className="w-32 h-8">
+                      <SelectValue placeholder="Talla" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {producto.variantes.map((v) => (
+                        <SelectItem key={v.id} value={v.talla}>{v.talla}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+
             <div>
               <p className="text-sm text-muted-foreground mb-2">Vista previa:</p>
-              <EtiquetaPreview producto={producto} />
+              <EtiquetaPreview producto={producto} talla={incluirTalla ? tallaSeleccionada : undefined} />
             </div>
 
             <DialogFooter>

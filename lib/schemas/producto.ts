@@ -14,6 +14,7 @@ export const crearProductoSchema = z.object({
   stock_actual: z.number().int().nonnegative("El stock no puede ser negativo").default(0),
   stock_minimo: z.number().int().nonnegative("El stock mínimo no puede ser negativo").default(0),
   unidad: z.string().min(1).max(16).default("unidad"),
+  talla: z.string().max(20).optional().nullable(),
 })
 
 export const editarProductoSchema = crearProductoSchema

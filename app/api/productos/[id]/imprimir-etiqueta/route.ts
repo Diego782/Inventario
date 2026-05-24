@@ -17,6 +17,7 @@ const execAsync = promisify(exec)
 
 const imprimirSchema = z.object({
   cantidad: z.number().int().min(1).max(100),
+  talla: z.string().max(20).optional(),
 })
 
 type Params = { params: Promise<{ id: string }> }
@@ -24,6 +25,10 @@ type Params = { params: Promise<{ id: string }> }
 const MM_TO_PT = 2.834645669
 
 function formatearPrecio(valor: number): string {
+  // Quitar decimales .00 para ahorrar espacio
+  if (valor % 1 === 0) {
+    return `$${new Intl.NumberFormat("es-MX").format(valor)}`
+  }
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
     currency: "MXN",
@@ -51,8 +56,9 @@ async function generarHtmlEtiquetas(opts: {
   anchoMm: number
   altoMm: number
   cantidad: number
+  talla?: string
 }): Promise<string> {
-  const { nombre, codigoBarras, precio, anchoMm, altoMm, cantidad } = opts
+  const { nombre, codigoBarras, precio, anchoMm, altoMm, cantidad, talla } = opts
 
   const precioStr = formatearPrecio(precio)
   const nombreEscapado = nombre.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -73,7 +79,7 @@ async function generarHtmlEtiquetas(opts: {
       : codigoBarras
         ? `<p class="codigo-texto">${codigoBarras}</p>`
         : ""
-  }<p class="precio">${precioStr}</p></div>`
+  }<p class="precio">${precioStr}${talla ? ` <span class="talla">— Talla: ${talla}</span>` : ""}</p></div>`
 
   const etiquetas = Array.from({ length: cantidad }).map(() => etiquetaHtml).join("")
 
@@ -145,6 +151,10 @@ async function generarHtmlEtiquetas(opts: {
       font-weight: bold;
       margin: 0.5mm 0 0 0;
       line-height: 1.1;
+      text-align: center;
+    }
+    .talla {
+      font-weight: bold;
     }
   </style>
 </head>
@@ -291,6 +301,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           anchoMm,
           altoMm,
           cantidad: input.cantidad,
+          talla: input.talla,
         })
         return new Response(html, {
           status: 200,

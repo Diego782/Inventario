@@ -5,12 +5,19 @@
  * - Convierte DateTime → string ISO 8601
  * - Calcula estado_stock según R7
  */
-import type { Producto as PProducto, Venta as PVenta, VentaItem as PVentaItem, MovimientoStock as PMovimiento } from "@prisma/client"
+import type { Producto as PProducto, Venta as PVenta, VentaItem as PVentaItem, MovimientoStock as PMovimiento, VarianteProducto as PVariante } from "@prisma/client"
 import { redondearBancario } from "@/lib/money"
 
 // ---- Tipos DTO ----
 
 export type EstadoStock = "En Stock" | "Bajo Stock" | "Crítico"
+
+export type VarianteDTO = {
+  id: string
+  talla: string
+  stock_actual: number
+  codigo_barras: string | null
+}
 
 export type ProductoDTO = {
   id: string
@@ -23,10 +30,12 @@ export type ProductoDTO = {
   stock_actual: number
   stock_minimo: number
   unidad: string
+  talla: string | null
   activo: boolean
   creado_en: string
   actualizado_en: string
   estado_stock: EstadoStock
+  variantes: VarianteDTO[]
 }
 
 export type VentaItemDTO = {
@@ -74,7 +83,19 @@ export function calcularEstadoStock(stock_actual: number, stock_minimo: number):
 
 // ---- Serializadores ----
 
-export function toProductoDTO(p: PProducto): ProductoDTO {
+export function toProductoDTO(p: PProducto & { variantes?: PVariante[] }): ProductoDTO {
+  const variantes = (p.variantes ?? []).map((v) => ({
+    id: v.id,
+    talla: v.talla,
+    stock_actual: v.stock_actual,
+    codigo_barras: v.codigo_barras,
+  }))
+
+  // Si tiene variantes, el stock total es la suma de las variantes
+  const stockTotal = variantes.length > 0
+    ? variantes.reduce((sum, v) => sum + v.stock_actual, 0)
+    : p.stock_actual
+
   return {
     id: p.id,
     sku: p.sku,
@@ -83,13 +104,15 @@ export function toProductoDTO(p: PProducto): ProductoDTO {
     categoria_id: p.categoria_id,
     precio_compra: redondearBancario(Number(p.precio_compra)),
     precio_venta: redondearBancario(Number(p.precio_venta)),
-    stock_actual: p.stock_actual,
+    stock_actual: stockTotal,
     stock_minimo: p.stock_minimo,
     unidad: p.unidad,
+    talla: p.talla ?? null,
     activo: p.activo,
     creado_en: p.creado_en.toISOString(),
     actualizado_en: p.actualizado_en.toISOString(),
-    estado_stock: calcularEstadoStock(p.stock_actual, p.stock_minimo),
+    estado_stock: calcularEstadoStock(stockTotal, p.stock_minimo),
+    variantes,
   }
 }
 

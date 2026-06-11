@@ -66,6 +66,20 @@ export class VentaTimeoutError extends Error {
   }
 }
 
+export class NotificacionNoEncontradaError extends Error {
+  constructor() {
+    super("NOTIFICACION_NO_ENCONTRADA")
+    this.name = "NotificacionNoEncontradaError"
+  }
+}
+
+export class ConsultaTimeoutError extends Error {
+  constructor() {
+    super("CONSULTA_TIMEOUT")
+    this.name = "ConsultaTimeoutError"
+  }
+}
+
 /**
  * Mapea cualquier error (Prisma o dominio) a una Response HTTP.
  * Nunca filtra stack traces al cliente.
@@ -78,6 +92,8 @@ export function mapPrismaError(e: unknown): Response {
   if (e instanceof ProductoNoEncontradoError) return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
   if (e instanceof LimiteFolioDiarioError) return errorConflicto("LIMITE_FOLIO_DIARIO")
   if (e instanceof VentaTimeoutError) return errorServidor("VENTA_TIMEOUT", 504)
+  if (e instanceof ConsultaTimeoutError) return errorServidor("CONSULTA_TIMEOUT", 504)
+  if (e instanceof NotificacionNoEncontradaError) return errorNoEncontrado("NOTIFICACION_NO_ENCONTRADA")
   if (e instanceof VentaFallidaError) return errorServidor("VENTA_FALLIDA")
 
   // Errores de Prisma
@@ -93,6 +109,11 @@ export function mapPrismaError(e: unknown): Response {
       return errorConflicto("CONFLICTO")
     }
     if (e.code === "P2025") {
+      // Distingue por modelo afectado para preservar el comportamiento del core.
+      const modelName = String(e.meta?.modelName ?? "").toLowerCase()
+      if (modelName.includes("notificacion")) {
+        return errorNoEncontrado("NOTIFICACION_NO_ENCONTRADA")
+      }
       return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
     }
   }

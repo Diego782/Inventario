@@ -16,6 +16,7 @@ import {
   LimiteFolioDiarioError,
   VentaFallidaError,
 } from "@/lib/api/errores"
+import { detectarStockCritico, estadoStock } from "@/lib/dominio/notificaciones"
 import { CONFIG_DEFAULTS, COLOR_TEMA_DEGO } from "@/lib/schemas/configuracion"
 import type { ConfiguracionMap } from "@/lib/schemas/configuracion"
 import type { CrearVentaInput } from "@/lib/schemas/venta"
@@ -165,6 +166,10 @@ export async function registrarVenta(
         for (const item of input.items) {
           const producto = productoMap.get(item.producto_id) as any
           const nuevoStock = producto.stock_actual - item.cantidad
+          // Estado de stock previo a la venta, calculado desde el snapshot bloqueado
+          // (FOR UPDATE). Se captura ANTES del update para detectar la transición a
+          // Crítico dentro de la misma transacción (R7.1, R7.6).
+          const estadoPrevio = estadoStock(producto.stock_actual, producto.stock_minimo)
           const subtotalLinea = redondearBancario(
             item.precio_unitario * item.cantidad
           )
@@ -201,6 +206,21 @@ export async function registrarVenta(
               organizacion_id: input.organizacion_id,
             },
           })
+
+          // Detectar transición a stock crítico dentro de la misma transacción.
+          // Si la venta deja al producto en Crítico, se crea exactamente 1
+          // notificación (con dedupe lógica); si la transacción falla, no queda
+          // notificación al revertirse todo (R7.1, R7.2, R7.3, R7.6, R7.7).
+          await detectarStockCritico(
+            tx,
+            {
+              producto_id: item.producto_id,
+              nombre: producto.nombre,
+              stock_actual: nuevoStock,
+              stock_minimo: producto.stock_minimo,
+            },
+            estadoPrevio
+          )
         }
 
         return { ...venta, items: itemsCreados }

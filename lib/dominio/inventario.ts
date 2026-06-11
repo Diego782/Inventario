@@ -13,6 +13,7 @@ import {
 } from "@/lib/api/errores"
 import type { CrearProductoInput, EditarProductoInput, AjusteStockInput } from "@/lib/schemas/producto"
 import type { Producto, MovimientoStock } from "@prisma/client"
+import { detectarStockCritico, estadoStock } from "@/lib/dominio/notificaciones"
 
 // ---- Helpers ----
 
@@ -47,11 +48,20 @@ function validarCodigoBarras(codigo: string | null | undefined): void {
 /**
  * Crea un nuevo producto en el catálogo para la organización dada.
  * Si no se proporciona código de barras, genera uno EAN-13 único dentro del tenant.
+ * Si se pasan `variantes_stock`, crea las variantes con su stock inicial en lugar de
+ * usar `stock_actual` directamente.
  */
 export async function crearProducto(input: CrearProductoInput, organizacion_id: string): Promise<Producto> {
   validarCodigoBarras(input.codigo_barras)
 
   const codigoBarras = input.codigo_barras || (await generarCodigoUnico(organizacion_id))
+
+  const tieneVariantes = Array.isArray(input.variantes_stock) && input.variantes_stock.length > 0
+
+  // El stock del producto raíz es la suma de variantes (o el valor directo si no hay variantes)
+  const stockTotal = tieneVariantes
+    ? input.variantes_stock!.reduce((sum, v) => sum + v.stock, 0)
+    : (input.stock_actual ?? 0)
 
   return prisma.producto.create({
     data: {
@@ -61,11 +71,19 @@ export async function crearProducto(input: CrearProductoInput, organizacion_id: 
       categoria_id: input.categoria_id ?? null,
       precio_compra: input.precio_compra ?? 0,
       precio_venta: input.precio_venta,
-      stock_actual: input.stock_actual ?? 0,
+      stock_actual: stockTotal,
       stock_minimo: input.stock_minimo ?? 0,
       unidad: input.unidad ?? "unidad",
-      talla: input.talla ?? null,
+      talla: tieneVariantes ? null : (input.talla ?? null),
       organizacion_id,
+      ...(tieneVariantes && {
+        variantes: {
+          create: input.variantes_stock!.map((v) => ({
+            talla: v.talla,
+            stock_actual: v.stock,
+          })),
+        },
+      }),
     },
     include: { variantes: true },
   })
@@ -164,6 +182,19 @@ export async function ajustarStock(
         },
       }),
     ])
+
+    // Detección de stock crítico dentro de la misma transacción (R7.1, R7.2, R7.3,
+    // R7.6, R7.7). Sólo crea notificación en la transición no-Crítico ⇒ Crítico.
+    await detectarStockCritico(
+      tx,
+      {
+        producto_id: id,
+        nombre: producto.nombre,
+        stock_actual: nuevoStock,
+        stock_minimo: producto.stock_minimo,
+      },
+      estadoStock(producto.stock_actual, producto.stock_minimo),
+    )
 
     return { producto: productoActualizado, movimiento }
   })

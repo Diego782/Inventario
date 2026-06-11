@@ -17,7 +17,6 @@ import {
   UserPlus,
   Users,
   Search,
-  Filter,
   Mail,
   MoreVertical,
   Briefcase,
@@ -141,10 +140,6 @@ function MiembrosGrid({ orgId }: { orgId: string }) {
           />
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Filter className="w-4 h-4 mr-2" />
-            Filtrar
-          </Button>
           {/* BETA: Botón Exportar oculto — sin funcionalidad implementada, se habilitará en próxima versión
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />

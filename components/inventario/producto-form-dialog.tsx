@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import {
@@ -28,13 +28,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 import { crearProductoSchema, editarProductoSchema } from "@/lib/schemas/producto"
 import type { ProductoDTO } from "@/lib/api/serializadores"
 import { toastDeError } from "@/lib/mensajes-error"
 import { GestionarCategoriasDialog } from "@/components/inventario/gestionar-categorias-dialog"
 import { GestionarUnidadesDialog } from "@/components/inventario/gestionar-unidades-dialog"
 import { GestionarTallasDialog } from "@/components/inventario/gestionar-tallas-dialog"
-import { Plus } from "lucide-react"
+import { Plus, X } from "lucide-react"
+import { cn } from "@/lib/utils"
 import type { z } from "zod"
 
 type CrearInput = z.infer<typeof crearProductoSchema>
@@ -64,6 +66,8 @@ export function ProductoFormDialog({
   const [gestionarCategorias, setGestionarCategorias] = useState(false)
   const [gestionarUnidades, setGestionarUnidades] = useState(false)
   const [gestionarTallas, setGestionarTallas] = useState(false)
+  // Tallas seleccionadas para el stock por talla (solo en modo crear)
+  const [tallasSeleccionadas, setTallasSeleccionadas] = useState<string[]>([])
 
   const schema = modo === "crear" ? crearProductoSchema : editarProductoSchema
   const form = useForm<CrearInput>({
@@ -79,8 +83,31 @@ export function ProductoFormDialog({
       stock_minimo: 0,
       unidad: "unidad",
       talla: null,
+      variantes_stock: [],
     },
   })
+
+  // useFieldArray para manejar el stock por talla dinámicamente
+  const { fields: variantesFields, replace: replaceVariantes } = useFieldArray({
+    control: form.control,
+    name: "variantes_stock" as any,
+  })
+
+  // Sincroniza variantes_stock cuando cambian las tallas seleccionadas
+  useEffect(() => {
+    if (modo !== "crear") return
+    const nuevasVariantes = tallasSeleccionadas.map((t) => {
+      // Preservar el stock ya ingresado si la talla estaba antes
+      const existente = form.getValues("variantes_stock")?.find((v: any) => v.talla === t)
+      return { talla: t, stock: existente?.stock ?? 0 }
+    })
+    replaceVariantes(nuevasVariantes as any)
+    // Si hay tallas seleccionadas, limpiar el campo talla simple
+    if (tallasSeleccionadas.length > 0) {
+      form.setValue("talla", null)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tallasSeleccionadas, modo])
 
   // Precargar valores en modo editar
   useEffect(() => {
@@ -97,6 +124,7 @@ export function ProductoFormDialog({
         talla: producto.talla ?? null,
       })
     } else if (modo === "crear") {
+      setTallasSeleccionadas([])
       form.reset({
         nombre: "",
         sku: "",
@@ -108,6 +136,7 @@ export function ProductoFormDialog({
         stock_minimo: 0,
         unidad: "unidad",
         talla: null,
+        variantes_stock: [],
       })
     }
   }, [modo, producto, form, open])
@@ -143,16 +172,29 @@ export function ProductoFormDialog({
     cargarTallas()
   }, [open])
 
+  // Togglear una talla en la selección
+  function toggleTalla(talla: string) {
+    setTallasSeleccionadas((prev) =>
+      prev.includes(talla) ? prev.filter((t) => t !== talla) : [...prev, talla]
+    )
+  }
+
   async function onSubmit(values: CrearInput) {
     setGuardando(true)
     try {
       const url = modo === "crear" ? "/api/productos" : `/api/productos/${producto?.id}`
       const method = modo === "crear" ? "POST" : "PATCH"
 
+      // Si no hay variantes seleccionadas, no enviar el campo
+      const payload = { ...values }
+      if (!payload.variantes_stock || payload.variantes_stock.length === 0) {
+        delete (payload as any).variantes_stock
+      }
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify(payload),
       })
 
       const data = await res.json()
@@ -177,6 +219,8 @@ export function ProductoFormDialog({
       setGuardando(false)
     }
   }
+
+  const usandoVariantes = modo === "crear" && tallasSeleccionadas.length > 0
 
   return (
     <>
@@ -315,45 +359,101 @@ export function ProductoFormDialog({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="talla"
-                render={({ field }) => (
-                  <FormItem>
-                    <div className="flex items-center gap-1">
-                      <FormLabel>Talla</FormLabel>
-                      <Button
+              {/* Selector de tallas — en modo crear usa toggles múltiples; en editar usa select simple */}
+              {modo === "crear" ? (
+                <FormItem className="col-span-2">
+                  <div className="flex items-center gap-1">
+                    <FormLabel>Tallas</FormLabel>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-5 w-5 rounded-full"
+                      onClick={() => setGestionarTallas(true)}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  {tallas.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No hay tallas configuradas.{" "}
+                      <button
                         type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-5 w-5 rounded-full"
+                        className="underline"
                         onClick={() => setGestionarTallas(true)}
                       >
-                        <Plus className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                    <Select
-                      onValueChange={(v) => field.onChange(v === "__none__" ? null : v)}
-                      value={field.value ?? "__none__"}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sin talla" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="__none__">Sin talla</SelectItem>
-                        {tallas.map((t) => (
-                          <SelectItem key={t} value={t}>
+                        Agregar tallas
+                      </button>
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {tallas.map((t) => {
+                        const activa = tallasSeleccionadas.includes(t)
+                        return (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => toggleTalla(t)}
+                            className={cn(
+                              "px-3 py-1 rounded-md border text-sm font-medium transition-colors",
+                              activa
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-background text-foreground border-border hover:bg-accent"
+                            )}
+                          >
                             {t}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {tallasSeleccionadas.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {tallasSeleccionadas.length} talla{tallasSeleccionadas.length > 1 ? "s" : ""} seleccionada{tallasSeleccionadas.length > 1 ? "s" : ""}. Ingresa el stock inicial para cada una.
+                    </p>
+                  )}
+                </FormItem>
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="talla"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center gap-1">
+                        <FormLabel>Talla</FormLabel>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-5 w-5 rounded-full"
+                          onClick={() => setGestionarTallas(true)}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                      <Select
+                        onValueChange={(v) => field.onChange(v === "__none__" ? null : v)}
+                        value={field.value ?? "__none__"}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sin talla" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="__none__">Sin talla</SelectItem>
+                          {tallas.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {t}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
@@ -395,25 +495,60 @@ export function ProductoFormDialog({
                 )}
               />
 
+              {/* Stock Inicial — simple si no hay tallas, por talla si las hay */}
               {modo === "crear" && (
-                <FormField
-                  control={form.control}
-                  name="stock_actual"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Stock Inicial</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                usandoVariantes ? (
+                  <div className="col-span-2 space-y-3">
+                    <FormLabel>Stock Inicial por Talla</FormLabel>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {variantesFields.map((variante, index) => (
+                        <FormField
+                          key={variante.id}
+                          control={form.control}
+                          name={`variantes_stock.${index}.stock` as any}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-normal">
+                                <Badge variant="outline" className="mr-1">
+                                  {(variantesFields[index] as any).talla}
+                                </Badge>
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  placeholder="0"
+                                  {...field}
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
                         />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="stock_actual"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Stock Inicial</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )
               )}
 
               <FormField
@@ -469,3 +604,5 @@ export function ProductoFormDialog({
     </>
   )
 }
+
+

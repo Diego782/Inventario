@@ -1,8 +1,9 @@
 "use client"
 
-import { Bell, Menu } from "lucide-react"
+import { Menu } from "lucide-react"
 // import { Input } from "@/components/ui/input" // BETA: oculto junto al buscador
 import { Button } from "@/components/ui/button"
+import { CampanaNotificaciones } from "@/components/notificaciones/campana-notificaciones"
 
 interface HeaderProps {
   title: string
@@ -45,10 +46,7 @@ export function Header({ title, onMenuClick }: HeaderProps) {
         </div>
         */}
         
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
-        </Button>
+        <CampanaNotificaciones />
       </div>
     </header>
   )

@@ -91,9 +91,10 @@ model Producto {
   creado_en       DateTime     @default(now())
   actualizado_en  DateTime     @updatedAt
 
-  movimientos MovimientoStock[]
-  venta_items VentaItem[]
-  variantes   VarianteProducto[]
+  movimientos    MovimientoStock[]
+  venta_items    VentaItem[]
+  variantes      VarianteProducto[]
+  notificaciones Notificacion[]
 
   @@unique([organizacion_id, sku])
   @@unique([organizacion_id, codigo_barras])
@@ -119,6 +120,7 @@ model MovimientoStock {
 
   @@index([organizacion_id])
   @@index([producto_id, creado_en])
+  @@index([creado_en])
   @@index([referencia_id])
   @@map("movimientos_stock")
 }
@@ -188,6 +190,22 @@ model VarianteProducto {
   @@map("variantes_producto")
 }
 
+model Notificacion {
+  id                  String    @id @default(uuid()) @db.Char(36)
+  tipo                String    @db.VarChar(40)
+  titulo              String    @db.VarChar(160)
+  mensaje             String    @db.VarChar(400)
+  producto_id         String?   @db.Char(36)
+  producto            Producto? @relation(fields: [producto_id], references: [id], onDelete: SetNull)
+  leida               Boolean   @default(false)
+  clave_deduplicacion String?   @unique @db.VarChar(120)
+  creado_en           DateTime  @default(now())
+
+  @@index([leida])
+  @@index([creado_en])
+  @@map("notificaciones")
+}
+
 // ---------- Identidad ----------
 
 model Usuario {
@@ -249,15 +267,15 @@ model Organizacion {
   creado_en      DateTime @default(now())
   actualizado_en DateTime @updatedAt
 
-  membresias      Membresia[]
-  roles           Rol[]
-  invitaciones    Invitacion[]
-  productos       Producto[]
-  categorias      Categoria[]
+  membresias        Membresia[]
+  roles             Rol[]
+  invitaciones      Invitacion[]
+  productos         Producto[]
+  categorias        Categoria[]
   movimientos_stock MovimientoStock[]
-  ventas          Venta[]
-  venta_items     VentaItem[]
-  configuraciones Configuracion[]
+  ventas            Venta[]
+  venta_items       VentaItem[]
+  configuraciones   Configuracion[]
 
   @@index([creado_por])
   @@map("organizaciones")
@@ -311,19 +329,19 @@ model PermisoRol {
 }
 
 model Invitacion {
-  id                String           @id @default(uuid()) @db.Char(36)
-  organizacion_id   String           @db.Char(36)
-  organizacion      Organizacion     @relation(fields: [organizacion_id], references: [id], onDelete: Cascade)
-  correo            String           @db.VarChar(255)
-  nombre_sugerido   String?          @db.VarChar(160)
-  rol_id            String           @db.Char(36)
-  rol               Rol              @relation(fields: [rol_id], references: [id])
-  estado            EstadoInvitacion @default(pendiente)
-  token_hash        String           @unique @db.VarChar(255)
-  expira_en         DateTime
-  invitado_por      String           @db.Char(36)
-  autor             Usuario          @relation("InvitacionAutor", fields: [invitado_por], references: [id])
-  creado_en         DateTime         @default(now())
+  id              String           @id @default(uuid()) @db.Char(36)
+  organizacion_id String           @db.Char(36)
+  organizacion    Organizacion     @relation(fields: [organizacion_id], references: [id], onDelete: Cascade)
+  correo          String           @db.VarChar(255)
+  nombre_sugerido String?          @db.VarChar(160)
+  rol_id          String           @db.Char(36)
+  rol             Rol              @relation(fields: [rol_id], references: [id])
+  estado          EstadoInvitacion @default(pendiente)
+  token_hash      String           @unique @db.VarChar(255)
+  expira_en       DateTime
+  invitado_por    String           @db.Char(36)
+  autor           Usuario          @relation("InvitacionAutor", fields: [invitado_por], references: [id])
+  creado_en       DateTime         @default(now())
 
   @@index([organizacion_id, estado])
   @@index([correo])

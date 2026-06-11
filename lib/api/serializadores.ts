@@ -5,7 +5,7 @@
  * - Convierte DateTime → string ISO 8601
  * - Calcula estado_stock según R7
  */
-import type { Producto as PProducto, Venta as PVenta, VentaItem as PVentaItem, MovimientoStock as PMovimiento, VarianteProducto as PVariante } from "@prisma/client"
+import type { Producto as PProducto, Venta as PVenta, VentaItem as PVentaItem, MovimientoStock as PMovimiento, VarianteProducto as PVariante, Notificacion as PNotificacion } from "@prisma/client"
 import { redondearBancario } from "@/lib/money"
 
 // ---- Tipos DTO ----
@@ -154,5 +154,85 @@ export function toMovimientoDTO(m: PMovimiento): MovimientoDTO {
     usuario_id: m.usuario_id,
     referencia_id: m.referencia_id,
     creado_en: m.creado_en.toISOString(),
+  }
+}
+
+// ---- DTOs de Dashboard (métricas) ----
+
+/**
+ * Métrica con su valor en el período actual, el valor del Periodo_Anterior
+ * y la variación porcentual entre ambos.
+ * `variacionPorcentual` es `null` cuando `anterior === 0` (R2.12).
+ */
+export type MetricaConVariacion = {
+  actual: number // redondeado a 2 decimales
+  anterior: number // métrica del Periodo_Anterior
+  variacionPorcentual: number | null // null si anterior === 0 (R2.12)
+}
+
+export type MetricasDTO = {
+  rango: { desde: string; hasta: string }
+  periodoAnterior: { desde: string; hasta: string }
+  totalSales: MetricaConVariacion
+  totalReturns: MetricaConVariacion
+  totalExpenses: MetricaConVariacion
+  estimatedProfit: MetricaConVariacion
+  series: {
+    ventas: Array<{ fecha: string; valor: number }> // por día, para sparkline y tendencia
+    gastos: Array<{ fecha: string; valor: number }> // comparativa ventas vs gastos
+  }
+}
+
+// ---- DTOs de Dashboard (rankings) ----
+
+export type RankingItemVenta = {
+  producto_id: string
+  nombre: string
+  unidadesVendidas: number
+  montoVendido: number // redondeado
+}
+
+export type RankingItemMargen = {
+  producto_id: string
+  nombre: string
+  margen: number // precio_venta - precio_compra, redondeado
+}
+
+export type RankingItemRotacion = {
+  producto_id: string
+  nombre: string
+  unidadesSalida: number
+}
+
+export type RankingsDTO = {
+  rango: { desde: string; hasta: string }
+  limite: number
+  topSelling: RankingItemVenta[] // desc por unidades, desempate id asc (R3.6)
+  topMargin: RankingItemMargen[] // desc por margen, desempate id asc (R3.7)
+  topRotation: RankingItemRotacion[] // desc por salida, desempate id asc (R3.8)
+  lowRotation: RankingItemRotacion[] // asc por salida (incluye ceros), desempate id asc (R3.9)
+}
+
+// ---- DTO de Notificaciones ----
+
+export type NotificacionDTO = {
+  id: string
+  tipo: string
+  titulo: string
+  mensaje: string
+  producto_id: string | null
+  leida: boolean
+  creado_en: string // ISO 8601 UTC
+}
+
+export function toNotificacionDTO(n: PNotificacion): NotificacionDTO {
+  return {
+    id: n.id,
+    tipo: n.tipo,
+    titulo: n.titulo,
+    mensaje: n.mensaje,
+    producto_id: n.producto_id ?? null,
+    leida: n.leida,
+    creado_en: n.creado_en.toISOString(),
   }
 }

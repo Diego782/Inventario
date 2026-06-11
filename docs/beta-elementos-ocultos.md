@@ -11,6 +11,8 @@
 | Elemento | Archivo | Razón |
 |---|---|---|
 | Botón "Exportar" en Inventario | `components/sections/inventario-section.tsx` | Sin funcionalidad implementada |
+| Botón "Exportar" en Ventas | `components/sections/ventas-section.tsx` | Sin funcionalidad implementada |
+| Botón "Exportar" en Empleados | `components/sections/usuarios-section.tsx` | Sin funcionalidad implementada |
 | Módulo completo "Fiadores" | `components/sidebar.tsx`, `app/page.tsx` | Módulo incompleto, se lanza en próxima versión |
 | Sección "Impuestos (IVA)" en Configuración | `components/sections/configuracion-section.tsx` | Funcionalidad sin backend listo |
 | Sección "Ticket de Venta" en Configuración | `components/sections/configuracion-section.tsx` | Funcionalidad sin backend listo |
@@ -37,6 +39,29 @@
      Exportar
    </Button>
    ```
+
+---
+
+### 1b. `components/sections/ventas-section.tsx`
+
+**Qué se ocultó:** Botón "Exportar" con ícono `Download`.
+
+**Cómo restaurarlo:**
+1. Restaurar el import de `Download`:
+   ```tsx
+   import { Search, Plus, Download } from "lucide-react"
+   ```
+2. Descomentar el bloque del botón (dentro del `<div className="flex gap-2">`).
+
+---
+
+### 1c. `components/sections/usuarios-section.tsx`
+
+**Qué se ocultó:** Botón "Exportar" con ícono `Download` en la pestaña Miembros.
+
+**Cómo restaurarlo:**
+1. Restaurar el import de `Download` en el bloque de lucide-react.
+2. Descomentar el bloque del botón (dentro del `<div className="flex gap-2">` en `MiembrosGrid`).
 
 ---
 
@@ -128,7 +153,8 @@ Negocio, Usuarios, Notificaciones, Seguridad, Base de Datos, Impresión, Método
 
 Antes de descomentar cada elemento, verificar:
 
-- [ ] **Exportar:** Implementar endpoint o lógica de exportación a CSV/Excel
+- [ ] **Exportar (Ventas):** Implementar exportación de historial de ventas a CSV/Excel
+- [ ] **Exportar (Empleados):** Implementar exportación de lista de miembros a CSV/Excel
 - [ ] **Fiadores:** Completar CRUD, validaciones y conexión al backend
 - [ ] **IVA / Impuestos:** Verificar que el cálculo se aplique correctamente en ventas
 - [ ] **Ticket de Venta:** Validar integración con impresoras térmicas

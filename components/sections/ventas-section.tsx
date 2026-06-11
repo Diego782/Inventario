@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input"
 import {
   Search,
   Plus,
-  Download,
 } from "lucide-react"
 import { VentasTable } from "@/components/ventas/ventas-table"
 import { FiltrosVentas, type FiltrosVentas as FiltrosVentasTipo } from "@/components/ventas/filtros-ventas"
@@ -73,10 +72,12 @@ export function VentasSection() {
         </div>
         <div className="flex gap-2">
           <FiltrosVentas filtros={filtros} onAplicar={setFiltros} />
+          {/* BETA: Botón Exportar oculto — sin funcionalidad implementada, se habilitará en próxima versión
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
             Exportar
           </Button>
+          */}
           <Button
             size="sm"
             className="bg-primary hover:bg-primary/90 text-primary-foreground"

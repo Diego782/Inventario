@@ -15,6 +15,7 @@
 | Sección "Impuestos (IVA)" en Configuración | `components/sections/configuracion-section.tsx` | Funcionalidad sin backend listo |
 | Sección "Ticket de Venta" en Configuración | `components/sections/configuracion-section.tsx` | Funcionalidad sin backend listo |
 | Buscador global del Header (navbar) | `components/header.tsx` | Sin funcionalidad implementada |
+| Grid de tarjetas de módulos (Configuración) | `components/sections/configuracion-section.tsx` | Módulos sin implementar (Negocio, Usuarios, Notificaciones, Seguridad, Base de Datos, Impresión, Métodos de Pago, Documentos) |
 
 ---
 
@@ -106,7 +107,14 @@ case "Fiadores":
 
 ---
 
-## Estrategia de ramas
+### 6. `components/sections/configuracion-section.tsx` — Grid de módulos
+
+**Qué se ocultó:** La grid completa de 8 tarjetas de módulos de configuración:
+Negocio, Usuarios, Notificaciones, Seguridad, Base de Datos, Impresión, Métodos de Pago, Documentos.
+
+**Cómo restaurarlo:** Quitar los delimitadores `{/* BETA: Grid de módulos ... */}` que envuelven el bloque `<div className="grid grid-cols-1 md:grid-cols-2 gap-6">`. El código completo está conservado dentro del comentario.
+
+---
 
 | Rama | Propósito | Estado de los elementos ocultos |
 |---|---|---|
@@ -125,3 +133,12 @@ Antes de descomentar cada elemento, verificar:
 - [ ] **IVA / Impuestos:** Verificar que el cálculo se aplique correctamente en ventas
 - [ ] **Ticket de Venta:** Validar integración con impresoras térmicas
 - [ ] **Buscador global:** Implementar búsqueda cross-módulo (productos, ventas, clientes)
+- [ ] **Grid de módulos (Configuración):** Implementar cada módulo antes de exponerlo:
+  - [ ] Negocio — nombre, dirección, teléfono, logotipo
+  - [ ] Usuarios — administradores, vendedores, roles y permisos
+  - [ ] Notificaciones — alertas de stock, notificaciones de ventas, recordatorios
+  - [ ] Seguridad — cambiar contraseña, autenticación, sesiones activas
+  - [ ] Base de Datos — respaldos, restaurar datos, limpiar registros
+  - [ ] Impresión — configuración de impresoras (tickets, reportes, etiquetas)
+  - [ ] Métodos de Pago — efectivo, tarjetas, transferencias, fiado
+  - [ ] Documentos — facturas, cotizaciones, contratos de fiador

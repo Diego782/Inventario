@@ -547,7 +547,7 @@ export function ConfiguracionSection() {
       {/* Identidad de la Organización */}
       <OrganizacionCard />
 
-      {/* Settings Grid */}
+      {/* BETA: Grid de módulos de configuración oculta — se habilitará en próxima versión
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {settingsSections.map((section) => (
           <div
@@ -579,6 +579,7 @@ export function ConfiguracionSection() {
           </div>
         ))}
       </div>
+      */}
     </div>
   )
 }

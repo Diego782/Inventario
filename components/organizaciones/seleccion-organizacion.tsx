@@ -16,6 +16,7 @@
 
 import * as React from "react"
 import { Building2, Plus, RefreshCw, Mail, LogOut } from "lucide-react"
+import { useTheme } from "next-themes"
 
 import { useOrganizacionActiva } from "@/hooks/use-organizacion-activa"
 import { useSesion } from "@/hooks/use-sesion"
@@ -30,6 +31,27 @@ export function SeleccionOrganizacion() {
   const { organizaciones, cargando, error, seleccionar, recargar } =
     useOrganizacionActiva()
   const { logout } = useSesion()
+  const { theme, setTheme } = useTheme()
+
+  // Igual que las pantallas de autenticación (marca Dego), la selección de
+  // organización siempre se muestra en modo claro, sin importar el tema que
+  // tenga el usuario. Se guarda la preferencia previa y se restaura al
+  // desmontar (cuando se entra a la app), de modo que el usuario recupera su
+  // modo (claro/oscuro) dentro del sistema.
+  const temaPrevioRef = React.useRef<string | undefined>(undefined)
+  React.useEffect(() => {
+    if (temaPrevioRef.current === undefined) {
+      temaPrevioRef.current = theme ?? "light"
+    }
+    setTheme("light")
+    return () => {
+      const previo = temaPrevioRef.current
+      if (previo && previo !== "light") {
+        setTheme(previo)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setTheme])
 
   const [seleccionando, setSeleccionando] = React.useState<string | null>(null)
   const [errorSeleccion, setErrorSeleccion] = React.useState<string | null>(null)

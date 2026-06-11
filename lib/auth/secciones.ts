@@ -1,7 +1,7 @@
 // lib/auth/secciones.ts
 export const SECCIONES = [
   "dashboard", "inventario", "ventas", "fiadores",
-  "empleados", "horarios", "configuracion", "usuarios",
+  "horarios", "configuracion", "usuarios",
 ] as const
 export type Seccion = (typeof SECCIONES)[number]
 

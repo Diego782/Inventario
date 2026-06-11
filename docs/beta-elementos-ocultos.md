@@ -13,7 +13,8 @@
 | Botón "Exportar" en Inventario | `components/sections/inventario-section.tsx` | Sin funcionalidad implementada |
 | Botón "Exportar" en Ventas | `components/sections/ventas-section.tsx` | Sin funcionalidad implementada |
 | Botón "Exportar" en Empleados | `components/sections/usuarios-section.tsx` | Sin funcionalidad implementada |
-| Módulo completo "Fiadores" | `components/sidebar.tsx`, `app/page.tsx` | Módulo incompleto, se lanza en próxima versión |
+| Fila "Fiadores" en matriz de permisos (Nuevo Rol) | `components/usuarios/rol-form-dialog.tsx` | Módulo no disponible en beta |
+| Fila "Empleados" duplicada en matriz de permisos | `lib/auth/secciones.ts` + `rol-form-dialog.tsx` | Sección unificada con "Usuarios", la entrada `empleados` era sobrante |
 | Sección "Impuestos (IVA)" en Configuración | `components/sections/configuracion-section.tsx` | Funcionalidad sin backend listo |
 | Sección "Ticket de Venta" en Configuración | `components/sections/configuracion-section.tsx` | Funcionalidad sin backend listo |
 | Buscador global del Header (navbar) | `components/header.tsx` | Sin funcionalidad implementada |

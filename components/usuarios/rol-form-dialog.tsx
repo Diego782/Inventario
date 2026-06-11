@@ -69,10 +69,9 @@ const ETIQUETA_SECCION: Record<Seccion, string> = {
   inventario: "Inventario",
   ventas: "Ventas",
   fiadores: "Fiadores",
-  empleados: "Empleados",
   horarios: "Horarios",
   configuracion: "Configuración",
-  usuarios: "Usuarios",
+  usuarios: "Empleados",
 }
 
 const ETIQUETA_ACCION: Record<Accion, string> = {
@@ -309,7 +308,10 @@ export function RolFormDialog({
                               </tr>
                             </thead>
                             <tbody>
-                              {SECCIONES.map((seccion) => (
+                              {SECCIONES.filter(
+                                // BETA: fila Fiadores oculta — módulo no disponible en esta versión
+                                (s) => s !== "fiadores"
+                              ).map((seccion) => (
                                 <tr
                                   key={seccion}
                                   className="border-t border-border/50"

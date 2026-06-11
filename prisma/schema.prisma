@@ -32,38 +32,72 @@ enum EstadoVenta {
   cancelada
 }
 
+enum EstadoUsuario {
+  pendiente
+  activo
+  suspendido
+}
+
+enum EstadoMembresia {
+  activa
+  suspendida
+}
+
+enum EstadoInvitacion {
+  pendiente
+  aceptada
+  expirada
+  revocada
+}
+
+enum TipoHorario {
+  normal
+  vacaciones
+  incapacidad
+  descanso
+}
+
 // ---------- Tablas ----------
 
 model Categoria {
-  id        String     @id @default(uuid()) @db.Char(36)
-  nombre    String     @unique @db.VarChar(80)
-  creado_en DateTime   @default(now())
-  productos Producto[]
+  id              String       @id @default(uuid()) @db.Char(36)
+  organizacion_id String       @db.Char(36)
+  organizacion    Organizacion @relation(fields: [organizacion_id], references: [id])
+  nombre          String       @db.VarChar(80)
+  creado_en       DateTime     @default(now())
+  productos       Producto[]
 
+  @@unique([organizacion_id, nombre])
+  @@index([organizacion_id])
   @@map("categorias")
 }
 
 model Producto {
-  id             String            @id @default(uuid()) @db.Char(36)
-  sku            String            @unique @db.VarChar(32)
-  codigo_barras  String?           @unique @db.VarChar(48)
-  nombre         String            @db.VarChar(160)
-  categoria_id   String?           @db.Char(36)
-  categoria      Categoria?        @relation(fields: [categoria_id], references: [id])
-  precio_compra  Decimal           @default(0) @db.Decimal(12, 2)
-  precio_venta   Decimal           @db.Decimal(12, 2)
-  stock_actual   Int               @default(0)
-  stock_minimo   Int               @default(0)
-  unidad         String            @default("unidad") @db.VarChar(16)
-  talla          String?           @db.VarChar(20)
-  activo         Boolean           @default(true)
-  creado_en      DateTime          @default(now())
-  actualizado_en DateTime          @updatedAt
+  id              String       @id @default(uuid()) @db.Char(36)
+  organizacion_id String       @db.Char(36)
+  organizacion    Organizacion @relation(fields: [organizacion_id], references: [id])
+  sku             String       @db.VarChar(32)
+  codigo_barras   String?      @db.VarChar(48)
+  nombre          String       @db.VarChar(160)
+  categoria_id    String?      @db.Char(36)
+  categoria       Categoria?   @relation(fields: [categoria_id], references: [id])
+  precio_compra   Decimal      @default(0) @db.Decimal(12, 2)
+  precio_venta    Decimal      @db.Decimal(12, 2)
+  stock_actual    Int          @default(0)
+  stock_minimo    Int          @default(0)
+  unidad          String       @default("unidad") @db.VarChar(16)
+  talla           String?      @db.VarChar(20)
+  activo          Boolean      @default(true)
+  creado_en       DateTime     @default(now())
+  actualizado_en  DateTime     @updatedAt
 
   movimientos MovimientoStock[]
   venta_items VentaItem[]
   variantes   VarianteProducto[]
 
+  @@unique([organizacion_id, sku])
+  @@unique([organizacion_id, codigo_barras])
+  @@index([organizacion_id])
   @@index([categoria_id])
   @@index([activo, stock_actual])
   @@map("productos")
@@ -71,6 +105,8 @@ model Producto {
 
 model MovimientoStock {
   id               String         @id @default(uuid()) @db.Char(36)
+  organizacion_id  String         @db.Char(36)
+  organizacion     Organizacion   @relation(fields: [organizacion_id], references: [id])
   producto_id      String         @db.Char(36)
   producto         Producto       @relation(fields: [producto_id], references: [id])
   tipo             TipoMovimiento
@@ -81,25 +117,29 @@ model MovimientoStock {
   referencia_id    String?        @db.Char(36)
   creado_en        DateTime       @default(now())
 
+  @@index([organizacion_id])
   @@index([producto_id, creado_en])
   @@index([referencia_id])
   @@map("movimientos_stock")
 }
 
 model Venta {
-  id          String      @id @default(uuid()) @db.Char(36)
-  folio       String      @unique @db.VarChar(24)
-  subtotal    Decimal     @db.Decimal(12, 2)
-  impuesto    Decimal     @db.Decimal(12, 2)
-  total       Decimal     @db.Decimal(12, 2)
-  metodo_pago MetodoPago
-  fiador_id   String?     @db.Char(36)
-  usuario_id  String?     @db.Char(36)
-  estado      EstadoVenta @default(completada)
-  creado_en   DateTime    @default(now())
+  id              String       @id @default(uuid()) @db.Char(36)
+  organizacion_id String       @db.Char(36)
+  organizacion    Organizacion @relation(fields: [organizacion_id], references: [id])
+  folio           String       @unique @db.VarChar(24)
+  subtotal        Decimal      @db.Decimal(12, 2)
+  impuesto        Decimal      @db.Decimal(12, 2)
+  total           Decimal      @db.Decimal(12, 2)
+  metodo_pago     MetodoPago
+  fiador_id       String?      @db.Char(36)
+  usuario_id      String?      @db.Char(36)
+  estado          EstadoVenta  @default(completada)
+  creado_en       DateTime     @default(now())
 
   items VentaItem[]
 
+  @@index([organizacion_id])
   @@index([creado_en])
   @@index([metodo_pago, creado_en])
   @@index([fiador_id])
@@ -107,25 +147,31 @@ model Venta {
 }
 
 model VentaItem {
-  id              String   @id @default(uuid()) @db.Char(36)
-  venta_id        String   @db.Char(36)
-  venta           Venta    @relation(fields: [venta_id], references: [id], onDelete: Cascade)
-  producto_id     String   @db.Char(36)
-  producto        Producto @relation(fields: [producto_id], references: [id])
+  id              String       @id @default(uuid()) @db.Char(36)
+  organizacion_id String       @db.Char(36)
+  organizacion    Organizacion @relation(fields: [organizacion_id], references: [id])
+  venta_id        String       @db.Char(36)
+  venta           Venta        @relation(fields: [venta_id], references: [id], onDelete: Cascade)
+  producto_id     String       @db.Char(36)
+  producto        Producto     @relation(fields: [producto_id], references: [id])
   cantidad        Int
-  precio_unitario Decimal  @db.Decimal(12, 2)
-  subtotal_linea  Decimal  @db.Decimal(12, 2)
+  precio_unitario Decimal      @db.Decimal(12, 2)
+  subtotal_linea  Decimal      @db.Decimal(12, 2)
 
+  @@index([organizacion_id])
   @@index([venta_id])
   @@index([producto_id])
   @@map("venta_items")
 }
 
 model Configuracion {
-  clave          String   @id @db.VarChar(64)
-  valor          String   @db.VarChar(255)
-  actualizado_en DateTime @updatedAt
+  organizacion_id String       @db.Char(36)
+  organizacion    Organizacion @relation(fields: [organizacion_id], references: [id])
+  clave           String       @db.VarChar(64)
+  valor           String       @db.VarChar(255)
+  actualizado_en  DateTime     @updatedAt
 
+  @@id([organizacion_id, clave])
   @@map("configuracion")
 }
 
@@ -140,4 +186,160 @@ model VarianteProducto {
   @@unique([producto_id, talla])
   @@index([producto_id])
   @@map("variantes_producto")
+}
+
+// ---------- Identidad ----------
+
+model Usuario {
+  id                String        @id @default(uuid()) @db.Char(36)
+  correo            String        @unique @db.VarChar(255)
+  nombre            String        @db.VarChar(160)
+  hash_contrasena   String        @db.VarChar(255)
+  correo_verificado Boolean       @default(false)
+  estado            EstadoUsuario @default(pendiente)
+  creado_en         DateTime      @default(now())
+  actualizado_en    DateTime      @updatedAt
+
+  sesiones               Sesion[]
+  tokens                 TokenVerificacion[]
+  membresias             Membresia[]
+  organizaciones_creadas Organizacion[]      @relation("OrganizacionCreador")
+  invitaciones_enviadas  Invitacion[]        @relation("InvitacionAutor")
+
+  @@map("usuarios")
+}
+
+model Sesion {
+  id                     String   @id @default(uuid()) @db.Char(36)
+  usuario_id             String   @db.Char(36)
+  usuario                Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  hash_sesion            String   @unique @db.VarChar(255)
+  organizacion_activa_id String?  @db.Char(36)
+  expira_en              DateTime
+  creado_en              DateTime @default(now())
+
+  @@index([usuario_id])
+  @@index([expira_en])
+  @@map("sesiones")
+}
+
+model TokenVerificacion {
+  id           String    @id @default(uuid()) @db.Char(36)
+  usuario_id   String    @db.Char(36)
+  usuario      Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  token_hash   String    @unique @db.VarChar(255)
+  expira_en    DateTime
+  consumido_en DateTime?
+  creado_en    DateTime  @default(now())
+
+  @@index([usuario_id])
+  @@map("tokens_verificacion")
+}
+
+// ---------- Organizaciones ----------
+
+model Organizacion {
+  id             String   @id @default(uuid()) @db.Char(36)
+  nombre         String   @db.VarChar(160)
+  slug           String   @unique @db.VarChar(80)
+  logo           String?  @db.MediumText
+  logo_aspecto   String?  @db.VarChar(16)
+  creado_por     String   @db.Char(36)
+  creador        Usuario  @relation("OrganizacionCreador", fields: [creado_por], references: [id])
+  creado_en      DateTime @default(now())
+  actualizado_en DateTime @updatedAt
+
+  membresias      Membresia[]
+  roles           Rol[]
+  invitaciones    Invitacion[]
+  productos       Producto[]
+  categorias      Categoria[]
+  movimientos_stock MovimientoStock[]
+  ventas          Venta[]
+  venta_items     VentaItem[]
+  configuraciones Configuracion[]
+
+  @@index([creado_por])
+  @@map("organizaciones")
+}
+
+model Membresia {
+  id              String          @id @default(uuid()) @db.Char(36)
+  usuario_id      String          @db.Char(36)
+  usuario         Usuario         @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  organizacion_id String          @db.Char(36)
+  organizacion    Organizacion    @relation(fields: [organizacion_id], references: [id], onDelete: Cascade)
+  rol_id          String          @db.Char(36)
+  rol             Rol             @relation(fields: [rol_id], references: [id])
+  estado          EstadoMembresia @default(activa)
+  creado_en       DateTime        @default(now())
+
+  horarios HorarioMiembro[]
+
+  @@unique([usuario_id, organizacion_id])
+  @@index([organizacion_id])
+  @@index([rol_id])
+  @@map("membresias")
+}
+
+model Rol {
+  id              String       @id @default(uuid()) @db.Char(36)
+  organizacion_id String       @db.Char(36)
+  organizacion    Organizacion @relation(fields: [organizacion_id], references: [id], onDelete: Cascade)
+  nombre          String       @db.VarChar(80)
+  es_sistema      Boolean      @default(false)
+  creado_en       DateTime     @default(now())
+
+  permisos     PermisoRol[]
+  membresias   Membresia[]
+  invitaciones Invitacion[]
+
+  @@unique([organizacion_id, nombre])
+  @@map("roles")
+}
+
+model PermisoRol {
+  id      String @id @default(uuid()) @db.Char(36)
+  rol_id  String @db.Char(36)
+  rol     Rol    @relation(fields: [rol_id], references: [id], onDelete: Cascade)
+  seccion String @db.VarChar(32)
+  accion  String @db.VarChar(32)
+
+  @@unique([rol_id, seccion, accion])
+  @@index([rol_id])
+  @@map("permisos_rol")
+}
+
+model Invitacion {
+  id                String           @id @default(uuid()) @db.Char(36)
+  organizacion_id   String           @db.Char(36)
+  organizacion      Organizacion     @relation(fields: [organizacion_id], references: [id], onDelete: Cascade)
+  correo            String           @db.VarChar(255)
+  nombre_sugerido   String?          @db.VarChar(160)
+  rol_id            String           @db.Char(36)
+  rol               Rol              @relation(fields: [rol_id], references: [id])
+  estado            EstadoInvitacion @default(pendiente)
+  token_hash        String           @unique @db.VarChar(255)
+  expira_en         DateTime
+  invitado_por      String           @db.Char(36)
+  autor             Usuario          @relation("InvitacionAutor", fields: [invitado_por], references: [id])
+  creado_en         DateTime         @default(now())
+
+  @@index([organizacion_id, estado])
+  @@index([correo])
+  @@map("invitaciones")
+}
+
+model HorarioMiembro {
+  id           String      @id @default(uuid()) @db.Char(36)
+  membresia_id String      @db.Char(36)
+  membresia    Membresia   @relation(fields: [membresia_id], references: [id], onDelete: Cascade)
+  dia          Int         @db.TinyInt
+  hora_inicio  String?     @db.VarChar(5)
+  hora_fin     String?     @db.VarChar(5)
+  tipo         TipoHorario
+  creado_en    DateTime    @default(now())
+
+  @@index([membresia_id])
+  @@map("horarios_miembro")
 }

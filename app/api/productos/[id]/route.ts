@@ -6,13 +6,22 @@ import { ok, errorNoEncontrado, errorPeticion } from "@/lib/api/respuestas"
 import { mapPrismaError, UsarAjusteStockError, ProductoNoEncontradoError } from "@/lib/api/errores"
 import { withValidation } from "@/lib/api/with-validation"
 import { editarProductoSchema } from "@/lib/schemas/producto"
+import { resolverContexto } from "@/lib/auth/contexto-request"
 
 type Params = { params: Promise<{ id: string }> }
 
 export async function GET(_req: NextRequest, { params }: Params) {
+  const resultado = await resolverContexto({ seccion: "inventario", accion: "ver" })
+  if (resultado.error) return resultado.error
+
+  const { ctx } = resultado
+
   try {
     const { id } = await params
-    const producto = await prisma.producto.findUnique({ where: { id }, include: { variantes: true } })
+    const producto = await prisma.producto.findUnique({
+      where: { id, organizacion_id: ctx.organizacionActiva!.id },
+      include: { variantes: true },
+    })
 
     if (!producto || !producto.activo) {
       return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
@@ -25,6 +34,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
+  const resultado = await resolverContexto({ seccion: "inventario", accion: "editar" })
+  if (resultado.error) return resultado.error
+
+  const { ctx } = resultado
   const { id } = await params
 
   // Verificar si el body intenta cambiar stock_actual
@@ -45,7 +58,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     body: JSON.stringify(body),
   }), async (input) => {
     try {
-      const producto = await editarProducto(id, input)
+      const producto = await editarProducto(id, input, ctx.organizacionActiva!.id)
       return ok(toProductoDTO(producto))
     } catch (e) {
       if (e instanceof UsarAjusteStockError) return errorPeticion("USAR_AJUSTE_STOCK")
@@ -56,10 +69,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
+  const resultado = await resolverContexto({ seccion: "inventario", accion: "eliminar" })
+  if (resultado.error) return resultado.error
+
+  const { ctx } = resultado
+
   try {
     const { id } = await params
-    const resultado = await bajaLogica(id)
-    return ok(resultado)
+    const resultado2 = await bajaLogica(id, ctx.organizacionActiva!.id)
+    return ok(resultado2)
   } catch (e) {
     if (e instanceof ProductoNoEncontradoError) return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
     return mapPrismaError(e)

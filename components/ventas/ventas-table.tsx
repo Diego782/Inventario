@@ -21,11 +21,13 @@ import { Eye, Printer } from "lucide-react"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import { fetchJson, buildUrl } from "@/lib/api/cliente"
 import type { VentaDTO } from "@/lib/api/serializadores"
+import type { FiltrosVentas } from "@/components/ventas/filtros-ventas"
 
 // ---- Tipos ----
 
 interface VentasTableProps {
   searchTerm: string
+  filtros?: FiltrosVentas
   refreshKey?: number
   onAccion: (tipo: "detalle" | "reimprimir", ventaId: string) => void
 }
@@ -95,17 +97,20 @@ function capitalizar(s: string): string {
 
 // ---- Componente ----
 
-export function VentasTable({ searchTerm, refreshKey, onAccion }: VentasTableProps) {
+export function VentasTable({ searchTerm, filtros, refreshKey, onAccion }: VentasTableProps) {
   const debouncedSearch = useDebouncedValue(searchTerm, 300)
   const [pagina, setPagina] = useState(0)
   const [datos, setDatos] = useState<ListadoVentas | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Resetear página cuando cambia la búsqueda
+  // Serializar filtros para usarlos como dependencia estable del efecto
+  const filtrosKey = JSON.stringify(filtros ?? {})
+
+  // Resetear página cuando cambia la búsqueda o los filtros
   useEffect(() => {
     setPagina(0)
-  }, [debouncedSearch])
+  }, [debouncedSearch, filtrosKey])
 
   const cargarVentas = useCallback(async () => {
     setCargando(true)
@@ -113,6 +118,7 @@ export function VentasTable({ searchTerm, refreshKey, onAccion }: VentasTablePro
     try {
       const url = buildUrl("/api/ventas", {
         q: debouncedSearch || undefined,
+        ...(filtros ?? {}),
         take: PAGE_SIZE,
         skip: pagina * PAGE_SIZE,
       })
@@ -123,7 +129,7 @@ export function VentasTable({ searchTerm, refreshKey, onAccion }: VentasTablePro
     } finally {
       setCargando(false)
     }
-  }, [debouncedSearch, pagina, refreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, filtrosKey, pagina, refreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     cargarVentas()

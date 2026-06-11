@@ -16,7 +16,8 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Switch } from "@/components/ui/switch"
-import { useTheme, presetColors } from "@/components/theme-provider"
+import { useTheme as useNextTheme } from "next-themes"
+import { presetColors } from "@/components/theme-provider"
 import {
   Store,
   User,
@@ -35,6 +36,8 @@ import {
 import { actualizarConfiguracionSchema } from "@/lib/schemas/configuracion"
 import { useConfiguracion } from "@/hooks/use-configuracion"
 import { toastDeError } from "@/lib/mensajes-error"
+import { OrganizacionCard } from "@/components/configuracion/organizacion-card"
+import { useIdentidadVisual } from "@/hooks/use-identidad-visual"
 import type { z } from "zod"
 
 type ConfigInput = z.infer<typeof actualizarConfiguracionSchema>
@@ -238,8 +241,17 @@ function AdvancedColorPicker({ currentColor, onSelect }: { currentColor: ColorVa
 }
 
 export function ConfiguracionSection() {
-  const { theme, setTheme, primaryColor, setPrimaryColor } = useTheme()
+  const { theme, setTheme } = useNextTheme()
+  const { identidad, actualizarColor } = useIdentidadVisual()
   const { data: config, actualizar } = useConfiguracion()
+
+  // Color actual desde identidad visual
+  const primaryColor = {
+    hue: identidad.color.color_hue,
+    saturation: identidad.color.color_saturation,
+    lightness: identidad.color.color_lightness,
+    name: "Actual"
+  }
 
   const form = useForm<ConfigInput>({
     resolver: zodResolver(actualizarConfiguracionSchema),
@@ -271,6 +283,20 @@ export function ConfiguracionSection() {
       toast.success("Configuración actualizada")
     } catch {
       toast.error(toastDeError("RED"))
+    }
+  }
+
+  // Manejador para aplicar color usando useIdentidadVisual
+  async function handleColorSelect(color: ColorValue) {
+    try {
+      await actualizarColor({
+        color_hue: color.hue,
+        color_saturation: color.saturation,
+        color_lightness: color.lightness,
+      })
+      toast.success("Color aplicado correctamente")
+    } catch {
+      toast.error("No se pudo aplicar el color")
     }
   }
 
@@ -501,8 +527,8 @@ export function ConfiguracionSection() {
               <ColorCircle
                 key={color.name}
                 color={color}
-                isSelected={primaryColor.hue === color.hue && primaryColor.name === color.name}
-                onClick={() => setPrimaryColor(color)}
+                isSelected={primaryColor.hue === color.hue && primaryColor.saturation === color.saturation}
+                onClick={() => handleColorSelect(color)}
               />
             ))}
           </div>
@@ -510,29 +536,14 @@ export function ConfiguracionSection() {
           <div className="border-t border-border pt-6">
             <AdvancedColorPicker
               currentColor={primaryColor}
-              onSelect={(color) => setPrimaryColor(color)}
+              onSelect={handleColorSelect}
             />
           </div>
         </div>
       </div>
 
-      {/* Business Info Card */}
-      <div className="bg-card rounded-xl border border-border shadow-sm p-6">
-        <div className="flex items-start gap-6">
-          <div className="w-20 h-20 rounded-xl bg-primary flex items-center justify-center">
-            <Store className="w-10 h-10 text-primary-foreground" />
-          </div>
-          <div className="flex-1">
-            <h2 className="text-xl font-bold text-foreground">Mi Negocio S.A. de C.V.</h2>
-            <p className="text-muted-foreground">Av. Principal #123, Col. Centro</p>
-            <p className="text-muted-foreground">Tel: +52 555 123 4567</p>
-            <div className="mt-4 flex gap-2">
-              <Button variant="outline" size="sm">Editar Informacion</Button>
-              <Button variant="outline" size="sm">Cambiar Logo</Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Identidad de la Organización */}
+      <OrganizacionCard />
 
       {/* Settings Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

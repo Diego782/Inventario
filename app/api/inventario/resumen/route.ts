@@ -1,11 +1,18 @@
+import { NextRequest } from "next/server"
 import { prisma } from "@/lib/db"
 import { ok } from "@/lib/api/respuestas"
 import { mapPrismaError } from "@/lib/api/errores"
+import { resolverContexto } from "@/lib/auth/contexto-request"
 
-export async function GET() {
+export async function GET(_req: NextRequest) {
+  const { ctx, error } = await resolverContexto({ seccion: "inventario", accion: "ver" })
+  if (error) return error
+
+  const orgId = ctx.organizacionActiva!.id
+
   try {
-    // Contar todos los productos activos
-    const total = await prisma.producto.count({ where: { activo: true } })
+    // Contar todos los productos activos del tenant
+    const total = await prisma.producto.count({ where: { activo: true, organizacion_id: orgId } })
 
     // Contar por estado de stock usando la lógica de R7:
     // Crítico: stock_actual = 0 OR stock_actual <= stock_minimo * 0.3
@@ -22,7 +29,7 @@ export async function GET() {
         END AS estado,
         COUNT(*) AS cantidad
       FROM productos
-      WHERE activo = true
+      WHERE activo = true AND organizacion_id = ${orgId}
       GROUP BY estado
     `
 

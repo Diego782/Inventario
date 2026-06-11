@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db"
 import { ok, errorNoEncontrado, errorServidor } from "@/lib/api/respuestas"
 import { mapPrismaError } from "@/lib/api/errores"
 import { withValidation } from "@/lib/api/with-validation"
+import { resolverContexto } from "@/lib/auth/contexto-request"
 
 const execAsync = promisify(exec)
 
@@ -267,9 +268,12 @@ async function generarPdfEtiquetas(opts: {
   return await pdf.save()
 }
 
-async function leerDimensionesEtiqueta(): Promise<{ anchoMm: number; altoMm: number }> {
+async function leerDimensionesEtiqueta(organizacion_id: string): Promise<{ anchoMm: number; altoMm: number }> {
   const filas = await prisma.configuracion.findMany({
-    where: { clave: { in: ["etiqueta_ancho_mm", "etiqueta_alto_mm"] } },
+    where: {
+      organizacion_id,
+      clave: { in: ["etiqueta_ancho_mm", "etiqueta_alto_mm"] },
+    },
   })
   const mapa: Record<string, string> = {}
   for (const f of filas) mapa[f.clave] = f.valor
@@ -280,16 +284,25 @@ async function leerDimensionesEtiqueta(): Promise<{ anchoMm: number; altoMm: num
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
+  const resultado = await resolverContexto({ seccion: "inventario", accion: "ver" })
+  if (resultado.error) return resultado.error
+
+  const { ctx } = resultado
+
   return withValidation(imprimirSchema, req, async (input) => {
     try {
       const { id } = await params
-      const producto = await prisma.producto.findUnique({ where: { id } })
+
+      // Verificar que el producto existe y pertenece a la organización activa
+      const producto = await prisma.producto.findUnique({
+        where: { id, organizacion_id: ctx.organizacionActiva!.id },
+      })
 
       if (!producto || !producto.activo) {
         return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
       }
 
-      const { anchoMm, altoMm } = await leerDimensionesEtiqueta()
+      const { anchoMm, altoMm } = await leerDimensionesEtiqueta(ctx.organizacionActiva!.id)
       const impresora = process.env.PRINTER_NAME?.trim()
 
       // Sin impresora: devolver HTML con @page size correcto para impresión desde el navegador

@@ -6,11 +6,10 @@ import { Input } from "@/components/ui/input"
 import {
   Search,
   Plus,
-  Filter,
   Download,
-  Calendar,
 } from "lucide-react"
 import { VentasTable } from "@/components/ventas/ventas-table"
+import { FiltrosVentas, type FiltrosVentas as FiltrosVentasTipo } from "@/components/ventas/filtros-ventas"
 import { NuevaVentaDialog } from "@/components/ventas/nueva-venta-dialog"
 import { TicketDialog } from "@/components/ventas/ticket-dialog"
 import { DetalleVentaDialog } from "@/components/ventas/detalle-venta-dialog"
@@ -27,6 +26,7 @@ type EstadoDialog =
 
 export function VentasSection() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [filtros, setFiltros] = useState<FiltrosVentasTipo>({})
   const [refreshKey, setRefreshKey] = useState(0)
   const [estado, setEstado] = useState<EstadoDialog>({ tipo: "ninguno" })
   const [ventaActual, setVentaActual] = useState<VentaDTO | null>(null)
@@ -72,14 +72,7 @@ export function VentasSection() {
           />
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Calendar className="w-4 h-4 mr-2" />
-            Fecha
-          </Button>
-          <Button variant="outline" size="sm">
-            <Filter className="w-4 h-4 mr-2" />
-            Filtrar
-          </Button>
+          <FiltrosVentas filtros={filtros} onAplicar={setFiltros} />
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
             Exportar
@@ -118,6 +111,7 @@ export function VentasSection() {
       {/* Tabla de ventas */}
       <VentasTable
         searchTerm={searchTerm}
+        filtros={filtros}
         refreshKey={refreshKey}
         onAccion={handleAccion}
       />

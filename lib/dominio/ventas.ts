@@ -16,7 +16,7 @@ import {
   LimiteFolioDiarioError,
   VentaFallidaError,
 } from "@/lib/api/errores"
-import { CONFIG_DEFAULTS } from "@/lib/schemas/configuracion"
+import { CONFIG_DEFAULTS, COLOR_TEMA_DEGO } from "@/lib/schemas/configuracion"
 import type { ConfiguracionMap } from "@/lib/schemas/configuracion"
 import type { CrearVentaInput } from "@/lib/schemas/venta"
 import type { Venta, VentaItem } from "@prisma/client"
@@ -31,9 +31,10 @@ export type VentaConItems = Venta & { items: VentaItem[] }
  * Lee la configuración desde la BD dentro de una transacción.
  * Aplica defaults para claves faltantes.
  */
-async function leerConfiguracionTx(tx: any): Promise<ConfiguracionMap> {
+async function leerConfiguracionTx(tx: any, organizacion_id: string): Promise<ConfiguracionMap> {
   const filas = await tx.configuracion.findMany({
     where: {
+      organizacion_id,
       clave: {
         in: [
           "porcentaje_impuesto",
@@ -77,6 +78,9 @@ async function leerConfiguracionTx(tx: any): Promise<ConfiguracionMap> {
       mapa.imprimir_automaticamente !== undefined
         ? mapa.imprimir_automaticamente === "true"
         : CONFIG_DEFAULTS.imprimir_automaticamente,
+    // El cálculo de ventas no usa el Color_Tema; se incluyen los defaults de
+    // Marca Dego para mantener la coherencia de tipo con ConfiguracionMap.
+    ...COLOR_TEMA_DEGO,
   }
 }
 
@@ -88,18 +92,18 @@ async function leerConfiguracionTx(tx: any): Promise<ConfiguracionMap> {
  * Si cualquier paso falla, se revierte todo sin alterar el stock.
  */
 export async function registrarVenta(
-  input: CrearVentaInput & { usuario_id?: string }
+  input: CrearVentaInput & { usuario_id?: string; organizacion_id: string }
 ): Promise<VentaConItems> {
   try {
     return await prisma.$transaction(
       async (tx) => {
         // 1. Leer configuración dentro de la transacción
-        const cfg = await leerConfiguracionTx(tx)
+        const cfg = await leerConfiguracionTx(tx, input.organizacion_id)
 
         // 2. Obtener productos con lock (SELECT para validación)
         const productoIds = input.items.map((i) => i.producto_id)
         const productos = await tx.producto.findMany({
-          where: { id: { in: productoIds }, activo: true },
+          where: { id: { in: productoIds }, activo: true, organizacion_id: input.organizacion_id },
         })
 
         // Verificar que todos los productos existen
@@ -138,7 +142,7 @@ export async function registrarVenta(
         const total = redondearBancario(subtotal + impuesto)
 
         // 5. Generar folio único dentro de la misma transacción
-        const folio = await generarFolio(tx, new Date())
+        const folio = await generarFolio(tx, new Date(), input.organizacion_id)
 
         // 6. Insertar la venta
         const venta = await tx.venta.create({
@@ -150,6 +154,7 @@ export async function registrarVenta(
             metodo_pago: input.metodo_pago as any,
             fiador_id: input.fiador_id ?? null,
             usuario_id: input.usuario_id ?? null,
+            organizacion_id: input.organizacion_id,
             estado: "completada",
           },
         })
@@ -172,6 +177,7 @@ export async function registrarVenta(
               cantidad: item.cantidad,
               precio_unitario: item.precio_unitario,
               subtotal_linea: subtotalLinea,
+              organizacion_id: input.organizacion_id,
             },
           })
           itemsCreados.push(ventaItem)
@@ -192,6 +198,7 @@ export async function registrarVenta(
               motivo: `Venta ${folio}`,
               referencia_id: venta.id,
               usuario_id: input.usuario_id ?? null,
+              organizacion_id: input.organizacion_id,
             },
           })
         }
@@ -216,20 +223,68 @@ export async function registrarVenta(
 
 /**
  * Lista ventas con filtros y paginación.
+ *
+ * Filtros avanzados (opcionales) — se combinan con AND:
+ * - `producto`: nombre del producto vendido (coincidencia parcial sobre los ítems).
+ * - `metodo_pago`: método de pago exacto.
+ * - rango `total_min` / `total_max` sobre el total de la venta.
+ * - rango de fechas `desde` / `hasta` sobre `creado_en`.
+ *
+ * `q` mantiene la búsqueda rápida sobre folio y método de pago.
  */
 export async function listarVentas(params: {
   q?: string
+  producto?: string
+  metodo_pago?: string
+  total_min?: number
+  total_max?: number
   desde?: string
   hasta?: string
   take?: number
   skip?: number
+  organizacion_id: string
 }): Promise<{ items: VentaConItems[]; total: number }> {
-  const { q, desde, hasta, take = 20, skip = 0 } = params
+  const {
+    q,
+    producto,
+    metodo_pago,
+    total_min,
+    total_max,
+    desde,
+    hasta,
+    take = 20,
+    skip = 0,
+    organizacion_id,
+  } = params
 
-  const where: any = {}
+  const where: any = { organizacion_id }
 
   if (q) {
-    where.folio = { contains: q }
+    // Búsqueda rápida: folio o método de pago
+    const condiciones: any[] = [{ folio: { contains: q } }]
+    const metodosValidos = ["efectivo", "tarjeta", "transferencia", "fiado"]
+    const qNormalizado = q.trim().toLowerCase()
+    if (metodosValidos.includes(qNormalizado)) {
+      condiciones.push({ metodo_pago: qNormalizado })
+    }
+    where.OR = condiciones
+  }
+
+  if (metodo_pago) where.metodo_pago = metodo_pago
+
+  if (producto) {
+    // Filtra ventas que tengan al menos un ítem cuyo producto coincida por nombre
+    where.items = {
+      some: {
+        producto: { nombre: { contains: producto } },
+      },
+    }
+  }
+
+  if (total_min !== undefined || total_max !== undefined) {
+    where.total = {}
+    if (total_min !== undefined) where.total.gte = total_min
+    if (total_max !== undefined) where.total.lte = total_max
   }
 
   if (desde || hasta) {
@@ -253,12 +308,12 @@ export async function listarVentas(params: {
 }
 
 /**
- * Obtiene una venta por ID con sus items.
- * Retorna null si no existe (el caller decide si lanzar 404).
+ * Obtiene una venta por ID con sus items, restringida al tenant.
+ * Retorna null si no existe o pertenece a otro tenant (el caller decide si lanzar 404).
  */
-export async function obtenerVenta(id: string): Promise<VentaConItems | null> {
-  return prisma.venta.findUnique({
-    where: { id },
+export async function obtenerVenta(id: string, organizacion_id: string): Promise<VentaConItems | null> {
+  return prisma.venta.findFirst({
+    where: { id, organizacion_id },
     include: { items: true },
   })
 }

@@ -1,16 +1,18 @@
 /**
  * lib/log.ts
- * Logger mínimo para InvenPro.
- * Envuelve console.* con prefijo [invenpro] y timestamp ISO.
+ * Logger mínimo para Dego.
+ * Envuelve console.* con prefijo [dego] y timestamp ISO.
  * No incluye datos sensibles (contraseñas, tokens, datos personales).
  */
+
+import { MARCA } from "@/lib/marca"
 
 type LogPayload = Record<string, unknown> | string
 
 function formatear(nivel: string, payload: LogPayload): string {
   const ts = new Date().toISOString()
   const datos = typeof payload === "string" ? payload : JSON.stringify(payload)
-  return `[invenpro] [${ts}] [${nivel}] ${datos}`
+  return `${MARCA.prefijoLog} [${ts}] [${nivel}] ${datos}`
 }
 
 export const log = {

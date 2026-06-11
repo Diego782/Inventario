@@ -4,12 +4,13 @@ import { prisma } from "@/lib/db"
 import { ok, creado, errorConflicto, errorNoEncontrado } from "@/lib/api/respuestas"
 import { mapPrismaError } from "@/lib/api/errores"
 import { withValidation } from "@/lib/api/with-validation"
+import { resolverContexto } from "@/lib/auth/contexto-request"
 
 const CLAVE = "unidades_disponibles"
 const DEFAULTS = ["unidad", "kg", "litro", "caja", "metro", "par"]
 
 async function leerUnidades(): Promise<string[]> {
-  const fila = await prisma.configuracion.findUnique({ where: { clave: CLAVE } })
+  const fila = await prisma.configuracion.findFirst({ where: { clave: CLAVE } })
   if (!fila) return DEFAULTS
   try {
     const parsed = JSON.parse(fila.valor)
@@ -19,15 +20,19 @@ async function leerUnidades(): Promise<string[]> {
   }
 }
 
-async function guardarUnidades(unidades: string[]): Promise<void> {
+async function guardarUnidades(unidades: string[], organizacion_id: string): Promise<void> {
   await prisma.configuracion.upsert({
-    where: { clave: CLAVE },
-    create: { clave: CLAVE, valor: JSON.stringify(unidades) },
+    where: { organizacion_id_clave: { organizacion_id, clave: CLAVE } },
+    create: { organizacion_id, clave: CLAVE, valor: JSON.stringify(unidades) },
     update: { valor: JSON.stringify(unidades) },
   })
 }
 
 export async function GET() {
+  // Requiere autenticación; unidades son configuración global compartida
+  const resultado = await resolverContexto("solo-sesion")
+  if (resultado.error) return resultado.error
+
   try {
     const unidades = await leerUnidades()
     return ok(unidades)
@@ -39,6 +44,9 @@ export async function GET() {
 const crearSchema = z.object({ nombre: z.string().min(1).max(30) })
 
 export async function POST(req: NextRequest) {
+  const resultado = await resolverContexto("solo-sesion")
+  if (resultado.error) return resultado.error
+
   return withValidation(crearSchema, req, async (input) => {
     try {
       const unidades = await leerUnidades()
@@ -47,7 +55,8 @@ export async function POST(req: NextRequest) {
         return errorConflicto("UNIDAD_DUPLICADA", 409, "Esa unidad ya existe.")
       }
       unidades.push(nombre)
-      await guardarUnidades(unidades)
+      const orgId = resultado.ctx.organizacionActiva?.id ?? "00000000-0000-4000-8000-000000000001"
+      await guardarUnidades(unidades, orgId)
       return creado(unidades)
     } catch (e) {
       return mapPrismaError(e)
@@ -58,6 +67,9 @@ export async function POST(req: NextRequest) {
 const editarSchema = z.object({ nombre: z.string().min(1).max(30), nuevo: z.string().min(1).max(30) })
 
 export async function PUT(req: NextRequest) {
+  const resultado = await resolverContexto("solo-sesion")
+  if (resultado.error) return resultado.error
+
   return withValidation(editarSchema, req, async (input) => {
     try {
       const unidades = await leerUnidades()
@@ -68,7 +80,8 @@ export async function PUT(req: NextRequest) {
         return errorConflicto("UNIDAD_DUPLICADA", 409, "Esa unidad ya existe.")
       }
       unidades[idx] = nuevo
-      await guardarUnidades(unidades)
+      const orgId = resultado.ctx.organizacionActiva?.id ?? "00000000-0000-4000-8000-000000000001"
+      await guardarUnidades(unidades, orgId)
       return ok(unidades)
     } catch (e) {
       return mapPrismaError(e)
@@ -79,6 +92,9 @@ export async function PUT(req: NextRequest) {
 const eliminarSchema = z.object({ nombre: z.string().min(1) })
 
 export async function DELETE(req: NextRequest) {
+  const resultado = await resolverContexto("solo-sesion")
+  if (resultado.error) return resultado.error
+
   return withValidation(eliminarSchema, req, async (input) => {
     try {
       const unidades = await leerUnidades()
@@ -87,7 +103,8 @@ export async function DELETE(req: NextRequest) {
       if (filtrado.length === unidades.length) {
         return errorNoEncontrado("NO_ENCONTRADO", "Unidad no encontrada.")
       }
-      await guardarUnidades(filtrado)
+      const orgId = resultado.ctx.organizacionActiva?.id ?? "00000000-0000-4000-8000-000000000001"
+      await guardarUnidades(filtrado, orgId)
       return ok(filtrado)
     } catch (e) {
       return mapPrismaError(e)

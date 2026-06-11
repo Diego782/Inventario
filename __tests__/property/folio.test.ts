@@ -8,6 +8,9 @@ import { LimiteFolioDiarioError } from "@/lib/api/errores"
 // Este test requiere una BD real. Se omite si DATABASE_URL no está definida.
 const TIENE_BD = !!process.env.DATABASE_URL
 
+// ID de organización de prueba (la organización por defecto del backfill)
+const ORG_ID_TEST = "00000000-0000-4000-8000-000000000001"
+
 // ---------------------------------------------------------------------------
 // Tests de integración con BD (Property 7 completa)
 // ---------------------------------------------------------------------------
@@ -34,14 +37,14 @@ describe.skipIf(!TIENE_BD)("Property 7: Folio único e incremental por día (con
           const clave = `folio_seq:${yyyymmdd}`
 
           await prisma.$executeRaw`
-            DELETE FROM configuracion WHERE clave = ${clave}
+            DELETE FROM configuracion WHERE organizacion_id = ${ORG_ID_TEST} AND clave = ${clave}
           `
 
           // Generar K folios secuencialmente (cada uno en su propia transacción)
           const folios: string[] = []
           for (let i = 0; i < K; i++) {
             const folio = await prisma.$transaction(async (tx) => {
-              return generarFolio(tx, fecha)
+              return generarFolio(tx, fecha, ORG_ID_TEST)
             })
             folios.push(folio)
           }
@@ -83,14 +86,14 @@ describe.skipIf(!TIENE_BD)("Property 7: Folio único e incremental por día (con
 
     // Forzar el contador a 9999 directamente
     await prisma.$executeRaw`
-      INSERT INTO configuracion (clave, valor, actualizado_en)
-      VALUES (${clave}, '9999', NOW())
+      INSERT INTO configuracion (organizacion_id, clave, valor, actualizado_en)
+      VALUES (${ORG_ID_TEST}, ${clave}, '9999', NOW())
       ON DUPLICATE KEY UPDATE valor = '9999', actualizado_en = NOW()
     `
 
     // La siguiente llamada debe lanzar LimiteFolioDiarioError
     await expect(
-      prisma.$transaction(async (tx) => generarFolio(tx, fechaLimite))
+      prisma.$transaction(async (tx) => generarFolio(tx, fechaLimite, ORG_ID_TEST))
     ).rejects.toThrow(LimiteFolioDiarioError)
   })
 })

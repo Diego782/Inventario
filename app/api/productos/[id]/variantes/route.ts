@@ -1,16 +1,30 @@
 import { NextRequest } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
-import { ok, creado, errorNoEncontrado, errorConflicto, errorPeticion } from "@/lib/api/respuestas"
+import { ok, creado, errorNoEncontrado, errorConflicto } from "@/lib/api/respuestas"
 import { mapPrismaError } from "@/lib/api/errores"
 import { withValidation } from "@/lib/api/with-validation"
+import { resolverContexto } from "@/lib/auth/contexto-request"
 
 type Params = { params: Promise<{ id: string }> }
 
 // Listar variantes de un producto
 export async function GET(_req: NextRequest, { params }: Params) {
+  const resultado = await resolverContexto({ seccion: "inventario", accion: "ver" })
+  if (resultado.error) return resultado.error
+
+  const { ctx } = resultado
+
   try {
     const { id } = await params
+
+    // Verificar que el producto pertenece a la organización activa
+    const producto = await prisma.producto.findUnique({
+      where: { id, organizacion_id: ctx.organizacionActiva!.id },
+      select: { id: true },
+    })
+    if (!producto) return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
+
     const variantes = await prisma.varianteProducto.findMany({
       where: { producto_id: id },
       orderBy: { talla: "asc" },
@@ -34,10 +48,17 @@ const crearVarianteSchema = z.object({
 
 // Crear una nueva variante (talla) para un producto
 export async function POST(req: NextRequest, { params }: Params) {
+  const resultado = await resolverContexto({ seccion: "inventario", accion: "editar" })
+  if (resultado.error) return resultado.error
+
+  const { ctx } = resultado
   const { id } = await params
+
   return withValidation(crearVarianteSchema, req, async (input) => {
     try {
-      const producto = await prisma.producto.findUnique({ where: { id } })
+      const producto = await prisma.producto.findUnique({
+        where: { id, organizacion_id: ctx.organizacionActiva!.id },
+      })
       if (!producto || !producto.activo) {
         return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
       }
@@ -78,9 +99,21 @@ const editarVarianteSchema = z.object({
 
 // Editar una variante (PUT)
 export async function PUT(req: NextRequest, { params }: Params) {
+  const resultado = await resolverContexto({ seccion: "inventario", accion: "editar" })
+  if (resultado.error) return resultado.error
+
+  const { ctx } = resultado
   const { id } = await params
+
   return withValidation(editarVarianteSchema, req, async (input) => {
     try {
+      // Verificar que el producto pertenece a la organización activa
+      const producto = await prisma.producto.findUnique({
+        where: { id, organizacion_id: ctx.organizacionActiva!.id },
+        select: { id: true },
+      })
+      if (!producto) return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
+
       const variante = await prisma.varianteProducto.findUnique({
         where: { id: input.variante_id },
       })
@@ -120,9 +153,21 @@ const eliminarVarianteSchema = z.object({
 
 // Eliminar una variante (DELETE)
 export async function DELETE(req: NextRequest, { params }: Params) {
+  const resultado = await resolverContexto({ seccion: "inventario", accion: "editar" })
+  if (resultado.error) return resultado.error
+
+  const { ctx } = resultado
   const { id } = await params
+
   return withValidation(eliminarVarianteSchema, req, async (input) => {
     try {
+      // Verificar que el producto pertenece a la organización activa
+      const producto = await prisma.producto.findUnique({
+        where: { id, organizacion_id: ctx.organizacionActiva!.id },
+        select: { id: true },
+      })
+      if (!producto) return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
+
       const variante = await prisma.varianteProducto.findUnique({
         where: { id: input.variante_id },
       })

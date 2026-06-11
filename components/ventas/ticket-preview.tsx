@@ -1,5 +1,6 @@
 "use client"
 
+import { MARCA } from "@/lib/marca"
 import type { VentaDTO } from "@/lib/api/serializadores"
 
 interface TicketPreviewProps {
@@ -34,7 +35,7 @@ export function TicketPreview({ venta, monto_recibido }: TicketPreviewProps) {
     >
       {/* Encabezado */}
       <div className="text-center mb-3">
-        <p className="font-bold text-sm">InvenPro</p>
+        <p className="font-bold text-sm">{MARCA.nombre}</p>
         <p className="text-muted-foreground">Sistema de Ventas</p>
         <p className="mt-1">Folio: <strong>{venta.folio}</strong></p>
         <p>{formatFechaHora(venta.creado_en)}</p>

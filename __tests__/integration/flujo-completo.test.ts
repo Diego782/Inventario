@@ -18,12 +18,16 @@ describe.skipIf(!TIENE_BD)("Flujo completo: inventario → venta", () => {
     // Limpiar datos de prueba
     if (productoId) {
       await prisma.movimientoStock.deleteMany({ where: { producto_id: productoId } })
+      // Eliminar ventaItems que referencian este producto antes de borrar el producto
+      await prisma.ventaItem.deleteMany({ where: { producto_id: productoId } })
       await prisma.producto.deleteMany({ where: { id: productoId } })
     }
   })
 
   it("1. Crear un producto sin código de barras genera EAN-13 automáticamente", async () => {
     const { crearProducto } = await import("@/lib/dominio/inventario")
+    // Usa la organización por defecto creada en la migración multi-tenant
+    const ORG_DEFAULT = "00000000-0000-4000-8000-000000000001"
     const producto = await crearProducto({
       nombre: "Producto Test E2E",
       sku: `TEST-E2E-${Date.now()}`,
@@ -32,7 +36,7 @@ describe.skipIf(!TIENE_BD)("Flujo completo: inventario → venta", () => {
       stock_actual: 10,
       stock_minimo: 2,
       unidad: "unidad",
-    })
+    }, ORG_DEFAULT)
 
     expect(producto.id).toBeTruthy()
     expect(producto.codigo_barras).toBeTruthy()
@@ -45,7 +49,8 @@ describe.skipIf(!TIENE_BD)("Flujo completo: inventario → venta", () => {
 
   it("2. Buscar el producto por código de barras lo resuelve correctamente", async () => {
     const { obtenerPorCodigo } = await import("@/lib/dominio/inventario")
-    const encontrado = await obtenerPorCodigo(codigoBarras)
+    const ORG_DEFAULT = "00000000-0000-4000-8000-000000000001"
+    const encontrado = await obtenerPorCodigo(codigoBarras, ORG_DEFAULT)
 
     expect(encontrado).not.toBeNull()
     expect(encontrado!.id).toBe(productoId)
@@ -53,6 +58,7 @@ describe.skipIf(!TIENE_BD)("Flujo completo: inventario → venta", () => {
 
   it("3. Registrar una venta descuenta el stock y crea los registros correctos", async () => {
     const { registrarVenta } = await import("@/lib/dominio/ventas")
+    const ORG_DEFAULT = "00000000-0000-4000-8000-000000000001"
 
     const stockAntes = 10
     const cantidadVenta = 3
@@ -67,6 +73,7 @@ describe.skipIf(!TIENE_BD)("Flujo completo: inventario → venta", () => {
       ],
       metodo_pago: "efectivo",
       monto_recibido: 300,
+      organizacion_id: ORG_DEFAULT,
     })
 
     expect(venta.folio).toMatch(/^VTA-\d{8}-\d{4}$/)

@@ -11,8 +11,9 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Plus, Filter, Download } from "lucide-react"
+import { Search, Plus, Download } from "lucide-react"
 import { InventarioTable } from "@/components/inventario/inventario-table"
+import { FiltrosInventario, type FiltrosInventario as FiltrosInventarioTipo } from "@/components/inventario/filtros-inventario"
 import { ProductoFormDialog } from "@/components/inventario/producto-form-dialog"
 import { EliminarProductoDialog } from "@/components/inventario/eliminar-producto-dialog"
 import { AjustarStockDialog } from "@/components/inventario/ajustar-stock-dialog"
@@ -40,6 +41,7 @@ type ResumenInventario = {
 
 export function InventarioSection() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [filtros, setFiltros] = useState<FiltrosInventarioTipo>({})
   const [refreshKey, setRefreshKey] = useState(0)
   const [estadoDialog, setEstadoDialog] = useState<EstadoDialog>({ tipo: null })
   const [productoSeleccionado, setProductoSeleccionado] = useState<ProductoDTO | null>(null)
@@ -87,10 +89,7 @@ export function InventarioSection() {
           />
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Filter className="w-4 h-4 mr-2" />
-            Filtrar
-          </Button>
+          <FiltrosInventario filtros={filtros} onAplicar={setFiltros} />
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
             Exportar
@@ -137,6 +136,7 @@ export function InventarioSection() {
       {/* Tabla principal */}
       <InventarioTable
         searchTerm={searchTerm}
+        filtros={filtros}
         refreshKey={refreshKey}
         onAccion={handleAccion}
       />

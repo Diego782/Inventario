@@ -29,6 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import type { ProductoDTO, EstadoStock } from "@/lib/api/serializadores"
+import type { FiltrosInventario } from "@/components/inventario/filtros-inventario"
 
 // ---- Tipos ----
 
@@ -43,6 +44,7 @@ type AccionTipo = "editar" | "eliminar" | "ajustar-stock" | "historial" | "impri
 
 interface InventarioTableProps {
   searchTerm: string
+  filtros?: FiltrosInventario
   refreshKey?: number
   onAccion: (tipo: AccionTipo, producto: ProductoDTO) => void
 }
@@ -84,17 +86,20 @@ function FilaSkeleton() {
 
 const PAGE_SIZE = 20
 
-export function InventarioTable({ searchTerm, refreshKey = 0, onAccion }: InventarioTableProps) {
+export function InventarioTable({ searchTerm, filtros, refreshKey = 0, onAccion }: InventarioTableProps) {
   const debouncedSearch = useDebouncedValue(searchTerm, 300)
   const [pagina, setPagina] = useState(0)
   const [datos, setDatos] = useState<ListadoResponse | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Resetear a página 0 cuando cambia la búsqueda
+  // Serializar filtros para usarlos como dependencia estable del efecto
+  const filtrosKey = JSON.stringify(filtros ?? {})
+
+  // Resetear a página 0 cuando cambia la búsqueda o los filtros
   useEffect(() => {
     setPagina(0)
-  }, [debouncedSearch])
+  }, [debouncedSearch, filtrosKey])
 
   const cargarDatos = useCallback(async () => {
     setCargando(true)
@@ -102,6 +107,14 @@ export function InventarioTable({ searchTerm, refreshKey = 0, onAccion }: Invent
     try {
       const params = new URLSearchParams()
       if (debouncedSearch) params.set("q", debouncedSearch)
+      // Añadir filtros avanzados
+      if (filtros) {
+        for (const [clave, valor] of Object.entries(filtros)) {
+          if (valor !== undefined && valor !== "") {
+            params.set(clave, String(valor))
+          }
+        }
+      }
       params.set("take", String(PAGE_SIZE))
       params.set("skip", String(pagina * PAGE_SIZE))
 
@@ -117,7 +130,7 @@ export function InventarioTable({ searchTerm, refreshKey = 0, onAccion }: Invent
     } finally {
       setCargando(false)
     }
-  }, [debouncedSearch, pagina, refreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, filtrosKey, pagina, refreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     cargarDatos()

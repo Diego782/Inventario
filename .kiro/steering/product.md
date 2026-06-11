@@ -1,6 +1,6 @@
 # Product Overview
 
-**InvenPro** is a Spanish-language inventory and sales management system (Sistema de Inventario y Ventas) built as a single-page web application.
+**Dego** is a Spanish-language inventory and sales management system (Sistema de Inventario y Ventas) built as a single-page web application.
 
 ## Core Modules
 

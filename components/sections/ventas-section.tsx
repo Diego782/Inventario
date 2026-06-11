@@ -105,7 +105,7 @@ export function VentasSection() {
         </div>
         <div className="bg-card rounded-lg border border-border p-4">
           <p className="text-sm text-muted-foreground">Pendiente Fiados</p>
-          <p className="text-2xl font-bold text-primary">—</p>
+          <p className="text-2xl font-bold text-red-500">—</p>
         </div>
       </div>
 

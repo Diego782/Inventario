@@ -54,7 +54,7 @@ interface InventarioTableProps {
 const ESTADO_CLASES: Record<EstadoStock, string> = {
   "En Stock": "bg-green-100 text-green-700 hover:bg-green-100",
   "Bajo Stock": "bg-yellow-100 text-yellow-700 hover:bg-yellow-100",
-  "Crítico": "bg-primary/10 text-primary hover:bg-primary/10",
+  "Crítico": "bg-red-100 text-red-600 hover:bg-red-100",
 }
 
 function BadgeEstado({ estado }: { estado: EstadoStock }) {

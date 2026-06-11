@@ -129,7 +129,7 @@ export function InventarioSection() {
         </div>
         <div className="bg-card rounded-lg border border-border p-4">
           <p className="text-sm text-muted-foreground">Crítico</p>
-          <p className="text-2xl font-bold text-primary">
+          <p className="text-2xl font-bold text-red-500">
             {resumen ? resumen.critico.toLocaleString("es-MX") : "—"}
           </p>
         </div>

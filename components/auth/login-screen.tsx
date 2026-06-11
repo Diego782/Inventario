@@ -178,8 +178,8 @@ export function LoginScreen({
         </section>
 
         {/* ── Panel de formulario ───────────────────────────────────────── */}
-        <section className="bg-background text-foreground">
-          <CardHeader className="space-y-4 pb-4">
+        <section className="bg-background text-foreground p-8 lg:p-10">
+          <CardHeader className="space-y-4 pb-4 px-0 pt-0">
             {/* Encabezado compacto de marca para una sola columna (<lg) */}
             <div className="space-y-3 lg:hidden">
               <BrandMark className="flex items-center gap-3" />
@@ -203,7 +203,7 @@ export function LoginScreen({
             </div>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="px-0 pb-0">
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}

@@ -1,7 +1,7 @@
 "use client"
 
-import { Bell, Search, Menu } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { Bell, Menu } from "lucide-react"
+// import { Input } from "@/components/ui/input" // BETA: oculto junto al buscador
 import { Button } from "@/components/ui/button"
 
 interface HeaderProps {
@@ -35,6 +35,7 @@ export function Header({ title, onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-4">
+        {/* BETA: Buscador global oculto — sin funcionalidad implementada, se habilitará en próxima versión
         <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -42,6 +43,7 @@ export function Header({ title, onMenuClick }: HeaderProps) {
             className="pl-10 w-64 bg-muted border-none"
           />
         </div>
+        */}
         
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="w-5 h-5" />

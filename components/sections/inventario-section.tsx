@@ -11,7 +11,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Plus, Download } from "lucide-react"
+import { Search, Plus } from "lucide-react"
 import { InventarioTable } from "@/components/inventario/inventario-table"
 import { FiltrosInventario, type FiltrosInventario as FiltrosInventarioTipo } from "@/components/inventario/filtros-inventario"
 import { ProductoFormDialog } from "@/components/inventario/producto-form-dialog"
@@ -90,10 +90,12 @@ export function InventarioSection() {
         </div>
         <div className="flex gap-2">
           <FiltrosInventario filtros={filtros} onAplicar={setFiltros} />
+          {/* BETA: Botón Exportar oculto — sin funcionalidad implementada, se habilitará en próxima versión
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" />
             Exportar
           </Button>
+          */}
           <Button
             size="sm"
             className="bg-primary hover:bg-primary/90 text-primary-foreground"

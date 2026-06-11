@@ -313,7 +313,7 @@ export function ConfiguracionSection() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* Impuestos */}
+            {/* BETA: Sección Impuestos (IVA) oculta — se habilitará en próxima versión
             <div className="bg-card rounded-lg border border-border p-4 space-y-4">
               <h3 className="font-medium">Impuestos</h3>
               <FormField
@@ -340,6 +340,7 @@ export function ConfiguracionSection() {
                 )}
               />
             </div>
+            */}
 
             {/* Etiquetas */}
             <div className="bg-card rounded-lg border border-border p-4 space-y-4">
@@ -386,7 +387,7 @@ export function ConfiguracionSection() {
               </div>
             </div>
 
-            {/* Ticket */}
+            {/* BETA: Sección Ticket de Venta oculta — se habilitará en próxima versión
             <div className="bg-card rounded-lg border border-border p-4 space-y-4">
               <h3 className="font-medium">Ticket de Venta</h3>
               <FormField
@@ -432,6 +433,7 @@ export function ConfiguracionSection() {
                 )}
               />
             </div>
+            */}
 
             {/* Inventario */}
             <div className="bg-card rounded-lg border border-border p-4 space-y-4">

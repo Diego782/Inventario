@@ -25,7 +25,8 @@ const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard" },
   { icon: Package, label: "Inventario" },
   { icon: ShoppingCart, label: "Ventas" },
-  { icon: UserCheck, label: "Fiadores" },
+  // BETA: Módulo Fiadores oculto — se habilitará en próxima versión
+  // { icon: UserCheck, label: "Fiadores" },
   { icon: Users, label: "Empleados" },
   { icon: Clock, label: "Horarios" },
   { icon: Settings, label: "Configuracion" },

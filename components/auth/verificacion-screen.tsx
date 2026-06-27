@@ -59,7 +59,6 @@ export function VerificacionScreen({
 }: VerificacionScreenProps) {
   const [estado, setEstado] = React.useState<EstadoVerificacion>("verificando")
   const [errorMensaje, setErrorMensaje] = React.useState<string>("")
-  const [redirigiendo, setRedirigiendo] = React.useState(false)
 
   // Estado del formulario de reenvío
   const [correoReenvio, setCorreoReenvio] = React.useState("")
@@ -92,7 +91,6 @@ export function VerificacionScreen({
 
         if (res.ok) {
           setEstado("exito")
-          setRedirigiendo(true)
         } else {
           setEstado("invalido")
           try {
@@ -123,24 +121,6 @@ export function VerificacionScreen({
       cancelado = true
     }
   }, [token, onLoginExitoso])
-
-  // -------------------------------------------------------------------------
-  // Redirigir después del éxito
-  // -------------------------------------------------------------------------
-  React.useEffect(() => {
-    if (redirigiendo) {
-      const timer = setTimeout(() => {
-        if (onLoginExitoso) {
-          onLoginExitoso()
-        } else {
-          // Si no hay callback, recargar la página para que vaya al login
-          window.location.href = "/"
-        }
-      }, 2000)
-
-      return () => clearTimeout(timer)
-    }
-  }, [redirigiendo, onLoginExitoso])
 
   // -------------------------------------------------------------------------
   // Reenviar verificación
@@ -225,7 +205,7 @@ export function VerificacionScreen({
               />
               <CardTitle>¡Correo verificado!</CardTitle>
               <CardDescription>
-                Tu cuenta ha sido activada correctamente. Redirigiendo al inicio de sesión...
+                Tu cuenta ha sido activada correctamente.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -233,7 +213,7 @@ export function VerificacionScreen({
                 <CheckCircle className="h-4 w-4" aria-hidden="true" />
                 <AlertTitle>Cuenta activa</AlertTitle>
                 <AlertDescription>
-                  Tu correo electrónico ha sido verificado exitosamente. Serás redirigido automáticamente en unos segundos.
+                  Tu correo electrónico ha sido verificado exitosamente. Ya puedes cerrar esta ventana e iniciar sesión en Dego.
                 </AlertDescription>
               </Alert>
             </CardContent>

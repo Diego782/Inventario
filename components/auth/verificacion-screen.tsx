@@ -59,6 +59,7 @@ export function VerificacionScreen({
 }: VerificacionScreenProps) {
   const [estado, setEstado] = React.useState<EstadoVerificacion>("verificando")
   const [errorMensaje, setErrorMensaje] = React.useState<string>("")
+  const [redirigiendo, setRedirigiendo] = React.useState(false)
 
   // Estado del formulario de reenvío
   const [correoReenvio, setCorreoReenvio] = React.useState("")
@@ -91,15 +92,7 @@ export function VerificacionScreen({
 
         if (res.ok) {
           setEstado("exito")
-          // Redirigir automáticamente después de 2 segundos
-          setTimeout(() => {
-            if (onLoginExitoso) {
-              onLoginExitoso()
-            } else {
-              // Si no hay callback, recargar la página para que vaya al login
-              window.location.href = "/"
-            }
-          }, 2000)
+          setRedirigiendo(true)
         } else {
           setEstado("invalido")
           try {
@@ -130,6 +123,24 @@ export function VerificacionScreen({
       cancelado = true
     }
   }, [token, onLoginExitoso])
+
+  // -------------------------------------------------------------------------
+  // Redirigir después del éxito
+  // -------------------------------------------------------------------------
+  React.useEffect(() => {
+    if (redirigiendo) {
+      const timer = setTimeout(() => {
+        if (onLoginExitoso) {
+          onLoginExitoso()
+        } else {
+          // Si no hay callback, recargar la página para que vaya al login
+          window.location.href = "/"
+        }
+      }, 2000)
+
+      return () => clearTimeout(timer)
+    }
+  }, [redirigiendo, onLoginExitoso])
 
   // -------------------------------------------------------------------------
   // Reenviar verificación

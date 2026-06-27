@@ -91,8 +91,15 @@ export function VerificacionScreen({
 
         if (res.ok) {
           setEstado("exito")
-          // Notificar al padre si se proporcionó el callback
-          onLoginExitoso?.()
+          // Redirigir automáticamente después de 2 segundos
+          setTimeout(() => {
+            if (onLoginExitoso) {
+              onLoginExitoso()
+            } else {
+              // Si no hay callback, recargar la página para que vaya al login
+              window.location.href = "/"
+            }
+          }, 2000)
         } else {
           setEstado("invalido")
           try {
@@ -207,8 +214,7 @@ export function VerificacionScreen({
               />
               <CardTitle>¡Correo verificado!</CardTitle>
               <CardDescription>
-                Tu cuenta ha sido activada correctamente. Ya puedes iniciar
-                sesión en Dego.
+                Tu cuenta ha sido activada correctamente. Redirigiendo al inicio de sesión...
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -216,18 +222,10 @@ export function VerificacionScreen({
                 <CheckCircle className="h-4 w-4" aria-hidden="true" />
                 <AlertTitle>Cuenta activa</AlertTitle>
                 <AlertDescription>
-                  Tu correo electrónico ha sido verificado y tu cuenta está
-                  lista para usar.
+                  Tu correo electrónico ha sido verificado exitosamente. Serás redirigido automáticamente en unos segundos.
                 </AlertDescription>
               </Alert>
             </CardContent>
-            {onLoginExitoso && (
-              <CardFooter>
-                <Button className="w-full" onClick={onLoginExitoso}>
-                  Ir al inicio de sesión
-                </Button>
-              </CardFooter>
-            )}
           </>
         )}
 

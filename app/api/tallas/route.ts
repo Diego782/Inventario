@@ -29,8 +29,8 @@ async function guardarTallas(tallas: string[], organizacion_id: string): Promise
 }
 
 export async function GET() {
-  // Requiere autenticación; tallas son configuración global compartida
-  const resultado = await resolverContexto("solo-sesion")
+  // Requiere autenticación con organización activa
+  const resultado = await resolverContexto("requiere-organizacion")
   if (resultado.error) return resultado.error
 
   try {
@@ -43,7 +43,7 @@ export async function GET() {
 const crearSchema = z.object({ nombre: z.string().min(1).max(20) })
 
 export async function POST(req: NextRequest) {
-  const resultado = await resolverContexto("solo-sesion")
+  const resultado = await resolverContexto("requiere-organizacion")
   if (resultado.error) return resultado.error
 
   return withValidation(crearSchema, req, async (input) => {
@@ -52,8 +52,7 @@ export async function POST(req: NextRequest) {
       const nombre = input.nombre.trim().toUpperCase()
       if (tallas.includes(nombre)) return errorConflicto("TALLA_DUPLICADA", 409, "Esa talla ya existe.")
       tallas.push(nombre)
-      // Para config global usamos un org_id fijo de sistema si no hay org activa
-      const orgId = resultado.ctx.organizacionActiva?.id ?? "00000000-0000-4000-8000-000000000001"
+      const orgId = resultado.ctx.organizacionActiva!.id
       await guardarTallas(tallas, orgId)
       return creado(tallas)
     } catch (e) {
@@ -65,7 +64,7 @@ export async function POST(req: NextRequest) {
 const editarSchema = z.object({ nombre: z.string().min(1).max(20), nuevo: z.string().min(1).max(20) })
 
 export async function PUT(req: NextRequest) {
-  const resultado = await resolverContexto("solo-sesion")
+  const resultado = await resolverContexto("requiere-organizacion")
   if (resultado.error) return resultado.error
 
   return withValidation(editarSchema, req, async (input) => {
@@ -76,7 +75,7 @@ export async function PUT(req: NextRequest) {
       const nuevo = input.nuevo.trim().toUpperCase()
       if (tallas.includes(nuevo) && nuevo !== tallas[idx]) return errorConflicto("TALLA_DUPLICADA", 409, "Esa talla ya existe.")
       tallas[idx] = nuevo
-      const orgId = resultado.ctx.organizacionActiva?.id ?? "00000000-0000-4000-8000-000000000001"
+      const orgId = resultado.ctx.organizacionActiva!.id
       await guardarTallas(tallas, orgId)
       return ok(tallas)
     } catch (e) {
@@ -88,7 +87,7 @@ export async function PUT(req: NextRequest) {
 const eliminarSchema = z.object({ nombre: z.string().min(1) })
 
 export async function DELETE(req: NextRequest) {
-  const resultado = await resolverContexto("solo-sesion")
+  const resultado = await resolverContexto("requiere-organizacion")
   if (resultado.error) return resultado.error
 
   return withValidation(eliminarSchema, req, async (input) => {
@@ -97,7 +96,7 @@ export async function DELETE(req: NextRequest) {
       const nombre = input.nombre.trim().toUpperCase()
       const filtrado = tallas.filter((t) => t !== nombre)
       if (filtrado.length === tallas.length) return errorNoEncontrado("NO_ENCONTRADO", "Talla no encontrada.")
-      const orgId = resultado.ctx.organizacionActiva?.id ?? "00000000-0000-4000-8000-000000000001"
+      const orgId = resultado.ctx.organizacionActiva!.id
       await guardarTallas(filtrado, orgId)
       return ok(filtrado)
     } catch (e) {

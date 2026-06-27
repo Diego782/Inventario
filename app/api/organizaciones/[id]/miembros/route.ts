@@ -17,7 +17,7 @@ type Params = { params: Promise<{ id: string }> }
 
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
-    const resultado = await resolverContexto({ seccion: "empleados", accion: "ver" })
+    const resultado = await resolverContexto({ seccion: "usuarios", accion: "ver" })
 
     if (resultado.error) {
       return resultado.error

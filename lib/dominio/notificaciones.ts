@@ -28,7 +28,7 @@ export function claveDedupStockCritico(productoId: string): string {
  */
 export async function detectarStockCritico(
   tx: Prisma.TransactionClient,
-  params: { producto_id: string; nombre: string; stock_actual: number; stock_minimo: number },
+  params: { producto_id: string; nombre: string; stock_actual: number; stock_minimo: number; organizacion_id: string },
   estadoPrevio: EstadoStock,
 ): Promise<void> {
   const estadoNuevo = estadoStock(params.stock_actual, params.stock_minimo)
@@ -54,6 +54,7 @@ export async function detectarStockCritico(
 
   await tx.notificacion.create({
     data: {
+      organizacion_id: params.organizacion_id,
       tipo: "stock_critico",
       titulo: "Stock crítico",
       mensaje:

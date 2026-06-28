@@ -218,6 +218,7 @@ export async function registrarVenta(
               nombre: producto.nombre,
               stock_actual: nuevoStock,
               stock_minimo: producto.stock_minimo,
+              organizacion_id: input.organizacion_id,
             },
             estadoPrevio
           )

@@ -192,6 +192,8 @@ model VarianteProducto {
 
 model Notificacion {
   id                  String    @id @default(uuid()) @db.Char(36)
+  organizacion_id     String    @db.Char(36)
+  organizacion        Organizacion @relation(fields: [organizacion_id], references: [id])
   tipo                String    @db.VarChar(40)
   titulo              String    @db.VarChar(160)
   mensaje             String    @db.VarChar(400)
@@ -201,6 +203,7 @@ model Notificacion {
   clave_deduplicacion String?   @unique @db.VarChar(120)
   creado_en           DateTime  @default(now())
 
+  @@index([organizacion_id])
   @@index([leida])
   @@index([creado_en])
   @@map("notificaciones")
@@ -276,6 +279,7 @@ model Organizacion {
   ventas            Venta[]
   venta_items       VentaItem[]
   configuraciones   Configuracion[]
+  notificaciones    Notificacion[]
 
   @@index([creado_por])
   @@map("organizaciones")

@@ -96,6 +96,7 @@ describe.skipIf(SKIP_DB || !TIENE_BD)(
                       nombre,
                       stock_actual: nuevoStock,
                       stock_minimo: STOCK_MINIMO,
+                      organizacion_id: DEFAULT_ORG_ID,
                     },
                     estadoPrevio,
                   )

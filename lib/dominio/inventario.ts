@@ -228,6 +228,7 @@ export async function ajustarStock(
         nombre: producto.nombre,
         stock_actual: nuevoStock,
         stock_minimo: producto.stock_minimo,
+        organizacion_id,
       },
       estadoStock(producto.stock_actual, producto.stock_minimo),
     )

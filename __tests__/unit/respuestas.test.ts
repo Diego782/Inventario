@@ -32,7 +32,7 @@ describe("Helpers de respuesta — Content-Type", () => {
   })
 
   it("errorConflicto() retorna 409 con Content-Type correcto", () => {
-    const res = errorConflicto("SKU_DUPLICADO")
+    const res = errorConflicto("CODIGO_BARRAS_DUPLICADO")
     expect(res.headers.get("content-type")).toBe(CONTENT_TYPE)
     expect(res.status).toBe(409)
   })

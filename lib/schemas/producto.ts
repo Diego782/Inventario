@@ -7,11 +7,6 @@ export const varianteStockSchema = z.object({
 
 export const crearProductoSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido").max(160),
-  sku: z
-    .string()
-    .min(1, "El SKU es requerido")
-    .max(32)
-    .regex(/^[A-Za-z0-9\-_]+$/, "El SKU solo puede contener letras, números, guiones y guiones bajos"),
   codigo_barras: z.string().max(48).optional().nullable(),
   categoria_id: z.string().uuid("ID de categoría inválido").optional().nullable(),
   precio_compra: z.number().nonnegative("El precio de compra no puede ser negativo").default(0),

@@ -63,7 +63,7 @@ describe.skipIf(SKIP_DB || !TIENE_BD)(
             data: {
               id: productoId,
               organizacion_id: DEFAULT_ORG_ID,
-              sku: `PBT-${productoId.slice(0, 12)}`,
+              codigo_barras: `PBT-${productoId.slice(0, 12)}`,
               nombre,
               precio_venta: 100,
               precio_compra: 50,

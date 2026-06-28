@@ -4,7 +4,6 @@ import { MENSAJES_ERROR, toastDeError } from "@/lib/mensajes-error"
 
 const CODIGOS_REQUERIDOS = [
   "VALIDACION",
-  "SKU_DUPLICADO",
   "CODIGO_BARRAS_DUPLICADO",
   "CODIGO_BARRAS_INVALIDO",
   "STOCK_NEGATIVO",
@@ -28,8 +27,8 @@ describe("Catálogo de mensajes de error en español", () => {
     }
   })
 
-  it("toastDeError retorna el mensaje correcto para SKU_DUPLICADO", () => {
-    expect(toastDeError("SKU_DUPLICADO")).toBe("Ya existe un producto con ese SKU.")
+  it("toastDeError retorna el mensaje correcto para CODIGO_BARRAS_DUPLICADO", () => {
+    expect(toastDeError("CODIGO_BARRAS_DUPLICADO")).toBe("Ese código de barras ya pertenece a otro producto.")
   })
 
   it("toastDeError retorna el fallback para códigos desconocidos", () => {

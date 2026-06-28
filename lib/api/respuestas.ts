@@ -74,7 +74,6 @@ export function errorPeticion(codigo: string, mensaje?: string): Response {
 
 const MENSAJES: Record<string, string> = {
   VALIDACION: "Los datos enviados no son válidos.",
-  SKU_DUPLICADO: "Ya existe un producto con ese SKU.",
   CODIGO_BARRAS_DUPLICADO: "Ese código de barras ya pertenece a otro producto.",
   CODIGO_BARRAS_INVALIDO: "El código de barras no es válido (EAN-13 o Code128).",
   STOCK_NEGATIVO: "Stock insuficiente para completar la operación.",

@@ -72,8 +72,7 @@ describe.skipIf(SKIP_DB || !TIENE_BD)(
       const producto = await prisma.producto.create({
         data: {
           organizacion_id: ORG,
-          sku: `ATOM-${sufijo}`,
-          codigo_barras: null,
+          codigo_barras: `ATOM-${sufijo}`,
           nombre: "Producto Atomicidad",
           precio_compra: 50,
           precio_venta: 100,

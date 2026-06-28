@@ -14,7 +14,6 @@ import * as fc from "fast-check"
 // --- In-memory state ---
 interface InMemoryProducto {
   id: string
-  sku: string
   codigo_barras: string
   nombre: string
   organizacion_id: string
@@ -68,7 +67,6 @@ describe("Property 12: Invariante de aislamiento multi-inquilino", () => {
       const id = newId()
       const producto: InMemoryProducto = {
         id,
-        sku: data.sku,
         codigo_barras: data.codigo_barras,
         nombre: data.nombre,
         organizacion_id: data.organizacion_id,
@@ -132,7 +130,6 @@ describe("Property 12: Invariante de aislamiento multi-inquilino", () => {
         fc.array(
           fc.record({
             nombre: fc.string({ minLength: 1, maxLength: 50 }),
-            sku: fc.string({ minLength: 1, maxLength: 20 }),
             precio_venta: fc.float({ min: Math.fround(0.01), max: Math.fround(9999), noNaN: true }),
           }),
           { minLength: 1, maxLength: 5 }
@@ -140,7 +137,6 @@ describe("Property 12: Invariante de aislamiento multi-inquilino", () => {
         fc.array(
           fc.record({
             nombre: fc.string({ minLength: 1, maxLength: 50 }),
-            sku: fc.string({ minLength: 1, maxLength: 20 }),
             precio_venta: fc.float({ min: Math.fround(0.01), max: Math.fround(9999), noNaN: true }),
           }),
           { minLength: 1, maxLength: 5 }
@@ -153,7 +149,7 @@ describe("Property 12: Invariante de aislamiento multi-inquilino", () => {
           // Seed products for org1
           for (const p of productosOrg1) {
             await crearProducto(
-              { sku: `${p.sku}-o1`, nombre: p.nombre, precio_venta: p.precio_venta },
+              { nombre: p.nombre, precio_venta: p.precio_venta },
               orgId1
             )
           }
@@ -161,7 +157,7 @@ describe("Property 12: Invariante de aislamiento multi-inquilino", () => {
           // Seed products for org2
           for (const p of productosOrg2) {
             await crearProducto(
-              { sku: `${p.sku}-o2`, nombre: p.nombre, precio_venta: p.precio_venta },
+              { nombre: p.nombre, precio_venta: p.precio_venta },
               orgId2
             )
           }
@@ -197,13 +193,11 @@ describe("Property 12: Invariante de aislamiento multi-inquilino", () => {
           .filter(({ orgId1, orgId2 }) => orgId1 !== orgId2),
         fc.record({
           nombre: fc.string({ minLength: 1, maxLength: 50 }),
-          sku: fc.string({ minLength: 1, maxLength: 20 }),
           precio_venta: fc.float({ min: Math.fround(0.01), max: Math.fround(9999), noNaN: true }),
         }),
         fc.array(
           fc.record({
             nombre: fc.string({ minLength: 1, maxLength: 50 }),
-            sku: fc.string({ minLength: 1, maxLength: 20 }),
             precio_venta: fc.float({ min: Math.fround(0.01), max: Math.fround(9999), noNaN: true }),
           }),
           { minLength: 0, maxLength: 3 }
@@ -216,7 +210,7 @@ describe("Property 12: Invariante de aislamiento multi-inquilino", () => {
           // Seed some products for org2 before the write
           for (const p of productosOrg2Previos) {
             await crearProducto(
-              { sku: `${p.sku}-o2`, nombre: p.nombre, precio_venta: p.precio_venta },
+              { nombre: p.nombre, precio_venta: p.precio_venta },
               orgId2
             )
           }
@@ -225,7 +219,7 @@ describe("Property 12: Invariante de aislamiento multi-inquilino", () => {
 
           // Create a product in org1
           const created = await crearProducto(
-            { sku: nuevoProducto.sku, nombre: nuevoProducto.nombre, precio_venta: nuevoProducto.precio_venta },
+            { nombre: nuevoProducto.nombre, precio_venta: nuevoProducto.precio_venta },
             orgId1
           )
 
@@ -270,7 +264,7 @@ describe("Property 12: Invariante de aislamiento multi-inquilino", () => {
           // Create products for org1
           for (let i = 0; i < countOrg1; i++) {
             await crearProducto(
-              { sku: `sku-org1-${i}`, nombre: `Producto Org1 ${i}`, precio_venta: 10 + i },
+              { nombre: `Producto Org1 ${i}`, precio_venta: 10 + i },
               orgId1
             )
           }
@@ -278,7 +272,7 @@ describe("Property 12: Invariante de aislamiento multi-inquilino", () => {
           // Create products for org2
           for (let i = 0; i < countOrg2; i++) {
             await crearProducto(
-              { sku: `sku-org2-${i}`, nombre: `Producto Org2 ${i}`, precio_venta: 20 + i },
+              { nombre: `Producto Org2 ${i}`, precio_venta: 20 + i },
               orgId2
             )
           }

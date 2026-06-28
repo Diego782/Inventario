@@ -76,8 +76,7 @@ model Producto {
   id              String       @id @default(uuid()) @db.Char(36)
   organizacion_id String       @db.Char(36)
   organizacion    Organizacion @relation(fields: [organizacion_id], references: [id])
-  sku             String       @db.VarChar(32)
-  codigo_barras   String?      @db.VarChar(48)
+  codigo_barras   String       @db.VarChar(48)
   nombre          String       @db.VarChar(160)
   categoria_id    String?      @db.Char(36)
   categoria       Categoria?   @relation(fields: [categoria_id], references: [id])
@@ -96,7 +95,6 @@ model Producto {
   variantes      VarianteProducto[]
   notificaciones Notificacion[]
 
-  @@unique([organizacion_id, sku])
   @@unique([organizacion_id, codigo_barras])
   @@index([organizacion_id])
   @@index([categoria_id])

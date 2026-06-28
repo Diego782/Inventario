@@ -30,7 +30,6 @@ describe.skipIf(!TIENE_BD)("Flujo completo: inventario → venta", () => {
     const ORG_DEFAULT = "00000000-0000-4000-8000-000000000001"
     const producto = await crearProducto({
       nombre: "Producto Test E2E",
-      sku: `TEST-E2E-${Date.now()}`,
       precio_venta: 100,
       precio_compra: 50,
       stock_actual: 10,

@@ -57,7 +57,7 @@ export function CarritoTable({
                 <TableCell>
                   <div>
                     <p className="font-medium text-sm">{item.producto.nombre}</p>
-                    <p className="text-xs text-muted-foreground">{item.producto.sku}</p>
+                    <p className="text-xs text-muted-foreground">{item.producto.codigo_barras}</p>
                   </div>
                 </TableCell>
                 <TableCell className="text-right text-sm whitespace-nowrap">

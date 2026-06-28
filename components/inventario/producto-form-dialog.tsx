@@ -74,7 +74,6 @@ export function ProductoFormDialog({
     resolver: zodResolver(schema as any),
     defaultValues: {
       nombre: "",
-      sku: "",
       codigo_barras: "",
       categoria_id: undefined,
       precio_compra: 0,
@@ -114,7 +113,6 @@ export function ProductoFormDialog({
     if (modo === "editar" && producto) {
       form.reset({
         nombre: producto.nombre,
-        sku: producto.sku,
         codigo_barras: producto.codigo_barras ?? "",
         categoria_id: producto.categoria_id ?? undefined,
         precio_compra: producto.precio_compra,
@@ -127,7 +125,6 @@ export function ProductoFormDialog({
       setTallasSeleccionadas([])
       form.reset({
         nombre: "",
-        sku: "",
         codigo_barras: "",
         categoria_id: undefined,
         precio_compra: 0,
@@ -243,20 +240,6 @@ export function ProductoFormDialog({
                     <FormLabel>Nombre *</FormLabel>
                     <FormControl>
                       <Input placeholder="Nombre del producto" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="sku"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SKU *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="SKU-001" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -145,7 +145,7 @@ export function InventarioTable({ searchTerm, filtros, refreshKey = 0, onAccion 
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
-            <TableHead className="font-semibold">SKU</TableHead>
+            <TableHead className="font-semibold">Código de Barras</TableHead>
             <TableHead className="font-semibold">Producto</TableHead>
             <TableHead className="font-semibold">Categoría</TableHead>
             <TableHead className="font-semibold text-center">Stock</TableHead>
@@ -179,7 +179,7 @@ export function InventarioTable({ searchTerm, filtros, refreshKey = 0, onAccion 
           {/* Filas de datos */}
           {!cargando && !error && datos?.items.map((producto) => (
             <TableRow key={producto.id} className="hover:bg-muted/30">
-              <TableCell className="font-mono text-sm">{producto.sku}</TableCell>
+              <TableCell className="font-mono text-sm">{producto.codigo_barras}</TableCell>
               <TableCell>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">

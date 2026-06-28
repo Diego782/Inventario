@@ -4,7 +4,7 @@
  * components/inventario/filtros-inventario.tsx
  * Panel de filtros avanzados del catálogo de productos.
  * Se monta en un Popover desde el botón "Filtrar" de InventarioSection.
- * Permite filtrar por nombre, SKU, unidad, categoría, talla y rangos de
+ * Permite filtrar por nombre, unidad, categoría, talla y rangos de
  * precio de venta, precio de compra, stock mínimo y stock inicial (actual).
  */
 
@@ -31,7 +31,6 @@ import {
 
 export type FiltrosInventario = {
   nombre?: string
-  sku?: string
   unidad?: string
   categoria_id?: string
   talla?: string
@@ -189,7 +188,7 @@ export function FiltrosInventario({ filtros, onAplicar }: FiltrosInventarioProps
           <Separator />
 
           {/* Texto */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="f-nombre" className="text-xs">Nombre</Label>
               <Input
@@ -197,15 +196,6 @@ export function FiltrosInventario({ filtros, onAplicar }: FiltrosInventarioProps
                 placeholder="Nombre"
                 value={borrador.nombre ?? ""}
                 onChange={(e) => setCampo("nombre", e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="f-sku" className="text-xs">SKU</Label>
-              <Input
-                id="f-sku"
-                placeholder="SKU"
-                value={borrador.sku ?? ""}
-                onChange={(e) => setCampo("sku", e.target.value)}
               />
             </div>
           </div>

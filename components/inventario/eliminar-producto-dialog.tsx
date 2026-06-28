@@ -56,7 +56,7 @@ export function EliminarProductoDialog({
           <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
           <AlertDialogDescription>
             Esta acción desactivará el producto{" "}
-            <strong>{producto?.nombre}</strong> (SKU: {producto?.sku}).
+            <strong>{producto?.nombre}</strong> (Código: {producto?.codigo_barras}).
             El historial de movimientos se conservará.
           </AlertDialogDescription>
         </AlertDialogHeader>

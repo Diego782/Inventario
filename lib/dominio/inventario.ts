@@ -65,7 +65,6 @@ export async function crearProducto(input: CrearProductoInput, organizacion_id: 
 
   return prisma.producto.create({
     data: {
-      sku: input.sku,
       codigo_barras: codigoBarras,
       nombre: input.nombre,
       categoria_id: input.categoria_id ?? null,
@@ -112,7 +111,6 @@ export async function editarProducto(
   return prisma.producto.update({
     where: { id },
     data: {
-      ...(input.sku !== undefined && { sku: input.sku }),
       ...(input.codigo_barras !== undefined && { codigo_barras: input.codigo_barras }),
       ...(input.nombre !== undefined && { nombre: input.nombre }),
       ...(input.categoria_id !== undefined && { categoria_id: input.categoria_id || null }),
@@ -131,12 +129,11 @@ export async function editarProducto(
  *
  * - Si el producto NO tiene ítems de venta asociados, se elimina físicamente
  *   (junto con sus variantes y movimientos de stock), liberando por completo
- *   el SKU y el código de barras para que puedan reutilizarse.
+ *   el código de barras para que pueda reutilizarse.
  * - Si el producto SÍ tiene historial de ventas, se conserva para no romper la
- *   integridad referencial, pero se desactiva (soft delete) y se renombran su
- *   SKU y código de barras con un sufijo único, liberando los valores
- *   originales para que el usuario pueda volver a crear un producto con el
- *   mismo SKU.
+ *   integridad referencial, pero se desactiva (soft delete) y se renombra su
+ *   código de barras con un sufijo único, liberando el valor original para que
+ *   el usuario pueda volver a crear un producto con el mismo código de barras.
  */
 export async function bajaLogica(id: string, organizacion_id: string): Promise<{ id: string; activo: false }> {
   const existente = await prisma.producto.findFirst({ where: { id, organizacion_id } })
@@ -145,7 +142,7 @@ export async function bajaLogica(id: string, organizacion_id: string): Promise<{
   const ventasAsociadas = await prisma.ventaItem.count({ where: { producto_id: id } })
 
   if (ventasAsociadas === 0) {
-    // Sin historial de ventas → eliminación física (libera SKU y código de barras)
+    // Sin historial de ventas → eliminación física (libera el código de barras)
     await prisma.$transaction(async (tx) => {
       await tx.movimientoStock.deleteMany({ where: { producto_id: id } })
       await tx.varianteProducto.deleteMany({ where: { producto_id: id } })
@@ -155,21 +152,16 @@ export async function bajaLogica(id: string, organizacion_id: string): Promise<{
     return { id, activo: false }
   }
 
-  // Con historial de ventas → soft delete + renombrar SKU/código para liberarlos.
+  // Con historial de ventas → soft delete + renombrar el código para liberarlo.
   // El sufijo usa los últimos 8 caracteres del id para garantizar unicidad y
-  // mantenerse dentro de los límites de longitud de columna (sku: 32, código: 48).
+  // mantenerse dentro de los límites de longitud de columna (código: 48).
   const sufijo = `__del_${id.slice(-8)}`
-  const skuArchivado = `${existente.sku.slice(0, 32 - sufijo.length)}${sufijo}`
-  const codigoArchivado =
-    existente.codigo_barras != null
-      ? `${existente.codigo_barras.slice(0, 48 - sufijo.length)}${sufijo}`
-      : null
+  const codigoArchivado = `${existente.codigo_barras.slice(0, 48 - sufijo.length)}${sufijo}`
 
   await prisma.producto.update({
     where: { id },
     data: {
       activo: false,
-      sku: skuArchivado,
       codigo_barras: codigoArchivado,
     },
   })
@@ -250,18 +242,17 @@ export async function obtenerPorCodigo(codigo: string, organizacion_id: string):
  * Lista productos con filtros y paginación, filtrados por tenant.
  *
  * Filtros avanzados (opcionales) — se combinan con AND:
- * - `nombre` / `sku`: coincidencia parcial (contains).
+ * - `nombre`: coincidencia parcial (contains).
  * - `unidad` / `talla`: coincidencia exacta.
  * - `categoria_id`: coincidencia exacta.
  * - rangos `*_min` / `*_max` sobre precio de venta, precio de compra,
  *   stock mínimo y stock actual (inicial).
  *
- * `q` mantiene la búsqueda rápida OR (nombre / sku / código de barras).
+ * `q` mantiene la búsqueda rápida OR (nombre / código de barras).
  */
 export async function listarProductos(params: {
   q?: string
   nombre?: string
-  sku?: string
   unidad?: string
   talla?: string
   categoria_id?: string
@@ -281,7 +272,6 @@ export async function listarProductos(params: {
   const {
     q,
     nombre,
-    sku,
     unidad,
     talla,
     categoria_id,
@@ -303,13 +293,11 @@ export async function listarProductos(params: {
   if (q) {
     where.OR = [
       { nombre: { contains: q } },
-      { sku: { contains: q } },
       { codigo_barras: { contains: q } },
     ]
   }
 
   if (nombre) where.nombre = { contains: nombre }
-  if (sku) where.sku = { contains: sku }
   if (unidad) where.unidad = unidad
   if (talla) where.talla = talla
   if (categoria_id) where.categoria_id = categoria_id

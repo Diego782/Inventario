@@ -13,7 +13,6 @@ const listadoQuerySchema = z
   .object({
     q: z.string().optional(),
     nombre: z.string().optional(),
-    sku: z.string().optional(),
     unidad: z.string().optional(),
     talla: z.string().optional(),
     categoria_id: z.string().uuid().optional(),

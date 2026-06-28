@@ -5,7 +5,7 @@
 ## Core Modules
 
 - **Dashboard** – Overview stats and key metrics
-- **Inventario** – Product inventory with stock tracking, SKU management, and status alerts (En Stock / Bajo Stock / Crítico)
+- **Inventario** – Product inventory with stock tracking, barcode (código de barras) management, and status alerts (En Stock / Bajo Stock / Crítico)
 - **Ventas** – Sales management
 - **Fiadores** – Guarantor/co-signer management
 - **Empleados** – Employee management

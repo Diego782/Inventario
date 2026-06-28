@@ -136,7 +136,7 @@ describe.skipIf(SKIP_DB || !TIENE_BD)(
         const creado = await prisma.producto.create({
           data: {
             organizacion_id: ORG_DEFAULT,
-            sku: `${sufijo}-${i}`,
+            codigo_barras: `${sufijo}-${i}`,
             nombre: `Producto métricas ${i}`,
             precio_compra: PRODUCTOS[i].precio_compra,
             precio_venta: PRODUCTOS[i].precio_venta,

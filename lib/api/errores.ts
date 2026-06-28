@@ -102,7 +102,6 @@ export function mapPrismaError(e: unknown): Response {
       // Unique constraint violation
       const target = (e.meta?.target as string[] | string | undefined) ?? ""
       const targetStr = Array.isArray(target) ? target.join(",") : String(target)
-      if (targetStr.includes("sku")) return errorConflicto("SKU_DUPLICADO")
       if (targetStr.includes("codigo_barras")) return errorConflicto("CODIGO_BARRAS_DUPLICADO")
       if (targetStr.includes("folio")) return errorConflicto("LIMITE_FOLIO_DIARIO")
       if (targetStr.includes("nombre")) return errorConflicto("CATEGORIA_DUPLICADA")

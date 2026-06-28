@@ -21,7 +21,6 @@ export type VarianteDTO = {
 
 export type ProductoDTO = {
   id: string
-  sku: string
   codigo_barras: string | null
   nombre: string
   categoria_id: string | null
@@ -99,7 +98,6 @@ export function toProductoDTO(p: PProducto & { variantes?: PVariante[] }): Produ
 
   return {
     id: p.id,
-    sku: p.sku,
     codigo_barras: p.codigo_barras,
     nombre: p.nombre,
     categoria_id: p.categoria_id,

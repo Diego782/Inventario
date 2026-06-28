@@ -36,3 +36,22 @@ export const crearVentaSchema = z
 
 export type CrearVentaInput = z.infer<typeof crearVentaSchema>
 export type CrearVentaItemInput = z.infer<typeof crearVentaItemSchema>
+
+export const editarVentaSchema = z
+  .object({
+    metodo_pago: z
+      .enum(["efectivo", "tarjeta", "transferencia", "fiado"], {
+        errorMap: () => ({ message: "Método de pago inválido" }),
+      })
+      .optional(),
+    estado: z
+      .enum(["completada", "pendiente", "cancelada"], {
+        errorMap: () => ({ message: "Estado inválido" }),
+      })
+      .optional(),
+  })
+  .refine((v) => v.metodo_pago !== undefined || v.estado !== undefined, {
+    message: "Debes indicar al menos un campo a editar",
+  })
+
+export type EditarVentaInput = z.infer<typeof editarVentaSchema>

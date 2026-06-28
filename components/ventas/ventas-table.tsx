@@ -17,8 +17,9 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Eye, Printer } from "lucide-react"
+import { Eye, Printer, Pencil, Trash2 } from "lucide-react"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
+import { usePermisos } from "@/hooks/use-permisos"
 import { fetchJson, buildUrl } from "@/lib/api/cliente"
 import type { VentaDTO } from "@/lib/api/serializadores"
 import type { FiltrosVentas } from "@/components/ventas/filtros-ventas"
@@ -29,7 +30,7 @@ interface VentasTableProps {
   searchTerm: string
   filtros?: FiltrosVentas
   refreshKey?: number
-  onAccion: (tipo: "detalle" | "reimprimir", ventaId: string) => void
+  onAccion: (tipo: "detalle" | "reimprimir" | "editar" | "eliminar", ventaId: string) => void
 }
 
 interface ListadoVentas {
@@ -99,6 +100,9 @@ function capitalizar(s: string): string {
 
 export function VentasTable({ searchTerm, filtros, refreshKey, onAccion }: VentasTableProps) {
   const debouncedSearch = useDebouncedValue(searchTerm, 300)
+  const { puede } = usePermisos()
+  const puedeEditar = puede("ventas", "editar")
+  const puedeEliminar = puede("ventas", "eliminar")
   const [pagina, setPagina] = useState(0)
   const [datos, setDatos] = useState<ListadoVentas | null>(null)
   const [cargando, setCargando] = useState(true)
@@ -251,6 +255,28 @@ export function VentasTable({ searchTerm, filtros, refreshKey, onAccion }: Venta
                     >
                       <Printer className="w-4 h-4" />
                     </Button>
+                    {puedeEditar && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label={`Editar ${venta.folio}`}
+                        onClick={() => onAccion("editar", venta.id)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {puedeEliminar && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        aria-label={`Eliminar ${venta.folio}`}
+                        onClick={() => onAccion("eliminar", venta.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

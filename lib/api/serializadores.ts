@@ -42,6 +42,7 @@ export type VentaItemDTO = {
   id: string
   venta_id: string
   producto_id: string
+  producto_nombre: string | null
   cantidad: number
   precio_unitario: number
   subtotal_linea: number
@@ -116,18 +117,19 @@ export function toProductoDTO(p: PProducto & { variantes?: PVariante[] }): Produ
   }
 }
 
-export function toVentaItemDTO(item: PVentaItem): VentaItemDTO {
+export function toVentaItemDTO(item: PVentaItem & { producto?: PProducto | null }): VentaItemDTO {
   return {
     id: item.id,
     venta_id: item.venta_id,
     producto_id: item.producto_id,
+    producto_nombre: item.producto?.nombre ?? null,
     cantidad: item.cantidad,
     precio_unitario: redondearBancario(Number(item.precio_unitario)),
     subtotal_linea: redondearBancario(Number(item.subtotal_linea)),
   }
 }
 
-export function toVentaDTO(v: PVenta & { items?: PVentaItem[] }): VentaDTO {
+export function toVentaDTO(v: PVenta & { items?: (PVentaItem & { producto?: PProducto | null })[] }): VentaDTO {
   return {
     id: v.id,
     folio: v.folio,

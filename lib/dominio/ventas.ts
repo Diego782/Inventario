@@ -334,6 +334,82 @@ export async function listarVentas(params: {
 export async function obtenerVenta(id: string, organizacion_id: string): Promise<VentaConItems | null> {
   return prisma.venta.findFirst({
     where: { id, organizacion_id },
-    include: { items: true },
+    include: { items: { include: { producto: true } } },
+  })
+}
+
+/**
+ * Edita el método de pago y/o estado de una venta existente.
+ * No modifica los ítems ni el stock (edición ligera de metadatos).
+ * Retorna null si la venta no existe o pertenece a otro tenant.
+ */
+export async function editarVenta(
+  id: string,
+  organizacion_id: string,
+  cambios: { metodo_pago?: string; estado?: string }
+): Promise<VentaConItems | null> {
+  const venta = await prisma.venta.findFirst({
+    where: { id, organizacion_id },
+  })
+  if (!venta) return null
+
+  const data: any = {}
+  if (cambios.metodo_pago !== undefined) data.metodo_pago = cambios.metodo_pago
+  if (cambios.estado !== undefined) data.estado = cambios.estado
+
+  await prisma.venta.update({ where: { id }, data })
+
+  return prisma.venta.findFirst({
+    where: { id, organizacion_id },
+    include: { items: { include: { producto: true } } },
+  })
+}
+
+/**
+ * Elimina una venta de forma atómica, revirtiendo el stock vendido.
+ * 1. Verifica que la venta pertenezca al tenant.
+ * 2. Devuelve el stock de cada ítem al producto correspondiente.
+ * 3. Registra un movimiento de stock de tipo "ajuste" por la reversión.
+ * 4. Elimina los ítems (cascade) y la venta.
+ * Retorna true si se eliminó, false si no existía.
+ */
+export async function eliminarVenta(id: string, organizacion_id: string): Promise<boolean> {
+  return await prisma.$transaction(async (tx) => {
+    const venta = await tx.venta.findFirst({
+      where: { id, organizacion_id },
+      include: { items: true },
+    })
+    if (!venta) return false
+
+    // Revertir stock de cada ítem
+    for (const item of venta.items) {
+      const producto = await tx.producto.findFirst({
+        where: { id: item.producto_id, organizacion_id },
+      })
+      if (producto) {
+        const nuevoStock = producto.stock_actual + item.cantidad
+        await tx.producto.update({
+          where: { id: item.producto_id },
+          data: { stock_actual: nuevoStock },
+        })
+        await tx.movimientoStock.create({
+          data: {
+            producto_id: item.producto_id,
+            tipo: "ajuste",
+            cantidad: item.cantidad,
+            stock_resultante: nuevoStock,
+            motivo: `Reversión por eliminación de venta ${venta.folio}`,
+            referencia_id: venta.id,
+            organizacion_id,
+          },
+        })
+      }
+    }
+
+    // Eliminar ítems y venta
+    await tx.ventaItem.deleteMany({ where: { venta_id: id } })
+    await tx.venta.delete({ where: { id } })
+
+    return true
   })
 }

@@ -112,8 +112,12 @@ export function DetalleVentaDialog({
                 <TableBody>
                   {venta.items?.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-mono text-xs">
-                        #{item.producto_id.slice(-8)}
+                      <TableCell className="font-medium">
+                        {item.producto_nombre ?? (
+                          <span className="font-mono text-xs text-muted-foreground">
+                            #{item.producto_id.slice(-8)}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {formatMXN(item.precio_unitario)}

@@ -12,6 +12,8 @@ import { FiltrosVentas, type FiltrosVentas as FiltrosVentasTipo } from "@/compon
 import { NuevaVentaDialog } from "@/components/ventas/nueva-venta-dialog"
 import { TicketDialog } from "@/components/ventas/ticket-dialog"
 import { DetalleVentaDialog } from "@/components/ventas/detalle-venta-dialog"
+import { EditarVentaDialog } from "@/components/ventas/editar-venta-dialog"
+import { EliminarVentaDialog } from "@/components/ventas/eliminar-venta-dialog"
 import type { VentaDTO } from "@/lib/api/serializadores"
 
 // ---- Tipos de estado de diálogo ----
@@ -22,6 +24,8 @@ type EstadoDialog =
   | { tipo: "ticket"; ventaId: string }
   | { tipo: "detalle"; ventaId: string }
   | { tipo: "reimprimir"; ventaId: string }
+  | { tipo: "editar"; ventaId: string }
+  | { tipo: "eliminar"; ventaId: string }
 
 export function VentasSection() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -30,7 +34,7 @@ export function VentasSection() {
   const [estado, setEstado] = useState<EstadoDialog>({ tipo: "ninguno" })
   const [ventaActual, setVentaActual] = useState<VentaDTO | null>(null)
 
-  function handleAccion(tipo: "detalle" | "reimprimir", ventaId: string) {
+  function handleAccion(tipo: "detalle" | "reimprimir" | "editar" | "eliminar", ventaId: string) {
     if (tipo === "reimprimir") {
       // Cargar la venta por ID para tener los datos completos en TicketDialog
       fetch(`/api/ventas/${ventaId}`)
@@ -46,6 +50,11 @@ export function VentasSection() {
       setEstado({ tipo, ventaId })
     }
   }
+
+  const handleVentaModificada = useCallback(() => {
+    setEstado({ tipo: "ninguno" })
+    setRefreshKey((k) => k + 1)
+  }, [])
 
   function handleNuevaVenta() {
     setEstado({ tipo: "nueva" })
@@ -137,6 +146,22 @@ export function VentasSection() {
         open={estado.tipo === "detalle"}
         ventaId={estado.tipo === "detalle" ? estado.ventaId : null}
         onClose={() => setEstado({ tipo: "ninguno" })}
+      />
+
+      {/* Dialog editar venta */}
+      <EditarVentaDialog
+        open={estado.tipo === "editar"}
+        ventaId={estado.tipo === "editar" ? estado.ventaId : null}
+        onClose={() => setEstado({ tipo: "ninguno" })}
+        onEditada={handleVentaModificada}
+      />
+
+      {/* Dialog eliminar venta */}
+      <EliminarVentaDialog
+        open={estado.tipo === "eliminar"}
+        ventaId={estado.tipo === "eliminar" ? estado.ventaId : null}
+        onClose={() => setEstado({ tipo: "ninguno" })}
+        onEliminada={handleVentaModificada}
       />
     </div>
   )

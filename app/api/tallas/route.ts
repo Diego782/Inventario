@@ -9,8 +9,8 @@ import { resolverContexto } from "@/lib/auth/contexto-request"
 const CLAVE = "tallas_disponibles"
 const DEFAULTS = ["XS", "S", "M", "L", "XL", "XXL"]
 
-async function leerTallas(): Promise<string[]> {
-  const fila = await prisma.configuracion.findFirst({ where: { clave: CLAVE } })
+async function leerTallas(organizacion_id: string): Promise<string[]> {
+  const fila = await prisma.configuracion.findFirst({ where: { organizacion_id, clave: CLAVE } })
   if (!fila) return DEFAULTS
   try {
     const parsed = JSON.parse(fila.valor)
@@ -34,7 +34,7 @@ export async function GET() {
   if (resultado.error) return resultado.error
 
   try {
-    return ok(await leerTallas())
+    return ok(await leerTallas(resultado.ctx.organizacionActiva!.id))
   } catch (e) {
     return mapPrismaError(e)
   }
@@ -48,11 +48,11 @@ export async function POST(req: NextRequest) {
 
   return withValidation(crearSchema, req, async (input) => {
     try {
-      const tallas = await leerTallas()
+      const orgId = resultado.ctx.organizacionActiva!.id
+      const tallas = await leerTallas(orgId)
       const nombre = input.nombre.trim().toUpperCase()
       if (tallas.includes(nombre)) return errorConflicto("TALLA_DUPLICADA", 409, "Esa talla ya existe.")
       tallas.push(nombre)
-      const orgId = resultado.ctx.organizacionActiva!.id
       await guardarTallas(tallas, orgId)
       return creado(tallas)
     } catch (e) {
@@ -69,13 +69,13 @@ export async function PUT(req: NextRequest) {
 
   return withValidation(editarSchema, req, async (input) => {
     try {
-      const tallas = await leerTallas()
+      const orgId = resultado.ctx.organizacionActiva!.id
+      const tallas = await leerTallas(orgId)
       const idx = tallas.indexOf(input.nombre.trim().toUpperCase())
       if (idx === -1) return errorNoEncontrado("NO_ENCONTRADO", "Talla no encontrada.")
       const nuevo = input.nuevo.trim().toUpperCase()
       if (tallas.includes(nuevo) && nuevo !== tallas[idx]) return errorConflicto("TALLA_DUPLICADA", 409, "Esa talla ya existe.")
       tallas[idx] = nuevo
-      const orgId = resultado.ctx.organizacionActiva!.id
       await guardarTallas(tallas, orgId)
       return ok(tallas)
     } catch (e) {
@@ -92,11 +92,11 @@ export async function DELETE(req: NextRequest) {
 
   return withValidation(eliminarSchema, req, async (input) => {
     try {
-      const tallas = await leerTallas()
+      const orgId = resultado.ctx.organizacionActiva!.id
+      const tallas = await leerTallas(orgId)
       const nombre = input.nombre.trim().toUpperCase()
       const filtrado = tallas.filter((t) => t !== nombre)
       if (filtrado.length === tallas.length) return errorNoEncontrado("NO_ENCONTRADO", "Talla no encontrada.")
-      const orgId = resultado.ctx.organizacionActiva!.id
       await guardarTallas(filtrado, orgId)
       return ok(filtrado)
     } catch (e) {

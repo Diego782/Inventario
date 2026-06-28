@@ -9,8 +9,8 @@ import { resolverContexto } from "@/lib/auth/contexto-request"
 const CLAVE = "unidades_disponibles"
 const DEFAULTS = ["unidad", "kg", "litro", "caja", "metro", "par"]
 
-async function leerUnidades(): Promise<string[]> {
-  const fila = await prisma.configuracion.findFirst({ where: { clave: CLAVE } })
+async function leerUnidades(organizacion_id: string): Promise<string[]> {
+  const fila = await prisma.configuracion.findFirst({ where: { organizacion_id, clave: CLAVE } })
   if (!fila) return DEFAULTS
   try {
     const parsed = JSON.parse(fila.valor)
@@ -34,7 +34,7 @@ export async function GET() {
   if (resultado.error) return resultado.error
 
   try {
-    const unidades = await leerUnidades()
+    const unidades = await leerUnidades(resultado.ctx.organizacionActiva!.id)
     return ok(unidades)
   } catch (e) {
     return mapPrismaError(e)
@@ -49,13 +49,13 @@ export async function POST(req: NextRequest) {
 
   return withValidation(crearSchema, req, async (input) => {
     try {
-      const unidades = await leerUnidades()
+      const orgId = resultado.ctx.organizacionActiva!.id
+      const unidades = await leerUnidades(orgId)
       const nombre = input.nombre.trim().toLowerCase()
       if (unidades.includes(nombre)) {
         return errorConflicto("UNIDAD_DUPLICADA", 409, "Esa unidad ya existe.")
       }
       unidades.push(nombre)
-      const orgId = resultado.ctx.organizacionActiva!.id
       await guardarUnidades(unidades, orgId)
       return creado(unidades)
     } catch (e) {
@@ -72,7 +72,8 @@ export async function PUT(req: NextRequest) {
 
   return withValidation(editarSchema, req, async (input) => {
     try {
-      const unidades = await leerUnidades()
+      const orgId = resultado.ctx.organizacionActiva!.id
+      const unidades = await leerUnidades(orgId)
       const idx = unidades.indexOf(input.nombre.trim().toLowerCase())
       if (idx === -1) return errorNoEncontrado("NO_ENCONTRADO", "Unidad no encontrada.")
       const nuevo = input.nuevo.trim().toLowerCase()
@@ -80,7 +81,6 @@ export async function PUT(req: NextRequest) {
         return errorConflicto("UNIDAD_DUPLICADA", 409, "Esa unidad ya existe.")
       }
       unidades[idx] = nuevo
-      const orgId = resultado.ctx.organizacionActiva!.id
       await guardarUnidades(unidades, orgId)
       return ok(unidades)
     } catch (e) {
@@ -97,13 +97,13 @@ export async function DELETE(req: NextRequest) {
 
   return withValidation(eliminarSchema, req, async (input) => {
     try {
-      const unidades = await leerUnidades()
+      const orgId = resultado.ctx.organizacionActiva!.id
+      const unidades = await leerUnidades(orgId)
       const nombre = input.nombre.trim().toLowerCase()
       const filtrado = unidades.filter((u) => u !== nombre)
       if (filtrado.length === unidades.length) {
         return errorNoEncontrado("NO_ENCONTRADO", "Unidad no encontrada.")
       }
-      const orgId = resultado.ctx.organizacionActiva!.id
       await guardarUnidades(filtrado, orgId)
       return ok(filtrado)
     } catch (e) {

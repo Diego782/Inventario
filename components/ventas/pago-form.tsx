@@ -36,15 +36,17 @@ export function PagoForm({ total, onCobrar, disabled }: PagoFormProps) {
   const [montoRecibido, setMontoRecibido] = useState<string>("")
   const [cobrando, setCobrando] = useState(false)
 
-  const monto = parseFloat(montoRecibido) || 0
+  // Campo vacío en efectivo = pago exacto (monto = total). Esto evita que el
+  // botón quede deshabilitado cuando el cajero no escribe nada y cobra el importe justo.
+  const monto = montoRecibido.trim() === "" ? total : (parseFloat(montoRecibido) || 0)
   const cambio = metodo === "efectivo" && monto >= total ? monto - total : null
-  const montoInsuficiente = metodo === "efectivo" && montoRecibido !== "" && monto < total
+  const montoInsuficiente = metodo === "efectivo" && montoRecibido.trim() !== "" && monto < total
 
   const puedeCobrarse =
     !disabled &&
     !cobrando &&
     total > 0 &&
-    (metodo !== "efectivo" || (monto >= total)) &&
+    (metodo !== "efectivo" || monto >= total) &&
     metodo !== "fiado" // fiado requiere fiador (simplificado por ahora)
 
   async function handleCobrar() {

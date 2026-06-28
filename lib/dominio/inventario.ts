@@ -127,15 +127,51 @@ export async function editarProducto(
 }
 
 /**
- * Realiza la baja lógica de un producto (soft delete), verificando que pertenezca al tenant.
+ * Realiza la baja de un producto, verificando que pertenezca al tenant.
+ *
+ * - Si el producto NO tiene ítems de venta asociados, se elimina físicamente
+ *   (junto con sus variantes y movimientos de stock), liberando por completo
+ *   el SKU y el código de barras para que puedan reutilizarse.
+ * - Si el producto SÍ tiene historial de ventas, se conserva para no romper la
+ *   integridad referencial, pero se desactiva (soft delete) y se renombran su
+ *   SKU y código de barras con un sufijo único, liberando los valores
+ *   originales para que el usuario pueda volver a crear un producto con el
+ *   mismo SKU.
  */
 export async function bajaLogica(id: string, organizacion_id: string): Promise<{ id: string; activo: false }> {
   const existente = await prisma.producto.findFirst({ where: { id, organizacion_id } })
   if (!existente) throw new ProductoNoEncontradoError()
 
+  const ventasAsociadas = await prisma.ventaItem.count({ where: { producto_id: id } })
+
+  if (ventasAsociadas === 0) {
+    // Sin historial de ventas → eliminación física (libera SKU y código de barras)
+    await prisma.$transaction(async (tx) => {
+      await tx.movimientoStock.deleteMany({ where: { producto_id: id } })
+      await tx.varianteProducto.deleteMany({ where: { producto_id: id } })
+      await tx.notificacion.deleteMany({ where: { producto_id: id } })
+      await tx.producto.delete({ where: { id } })
+    })
+    return { id, activo: false }
+  }
+
+  // Con historial de ventas → soft delete + renombrar SKU/código para liberarlos.
+  // El sufijo usa los últimos 8 caracteres del id para garantizar unicidad y
+  // mantenerse dentro de los límites de longitud de columna (sku: 32, código: 48).
+  const sufijo = `__del_${id.slice(-8)}`
+  const skuArchivado = `${existente.sku.slice(0, 32 - sufijo.length)}${sufijo}`
+  const codigoArchivado =
+    existente.codigo_barras != null
+      ? `${existente.codigo_barras.slice(0, 48 - sufijo.length)}${sufijo}`
+      : null
+
   await prisma.producto.update({
     where: { id },
-    data: { activo: false },
+    data: {
+      activo: false,
+      sku: skuArchivado,
+      codigo_barras: codigoArchivado,
+    },
   })
 
   return { id, activo: false }

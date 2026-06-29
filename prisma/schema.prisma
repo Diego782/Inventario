@@ -154,6 +154,8 @@ model VentaItem {
   venta           Venta        @relation(fields: [venta_id], references: [id], onDelete: Cascade)
   producto_id     String       @db.Char(36)
   producto        Producto     @relation(fields: [producto_id], references: [id])
+  variante_id     String?           @db.Char(36)
+  variante        VarianteProducto? @relation(fields: [variante_id], references: [id], onDelete: SetNull)
   cantidad        Int
   precio_unitario Decimal      @db.Decimal(12, 2)
   subtotal_linea  Decimal      @db.Decimal(12, 2)
@@ -161,6 +163,7 @@ model VentaItem {
   @@index([organizacion_id])
   @@index([venta_id])
   @@index([producto_id])
+  @@index([variante_id])
   @@map("venta_items")
 }
 
@@ -182,6 +185,8 @@ model VarianteProducto {
   talla         String   @db.VarChar(20)
   stock_actual  Int      @default(0)
   codigo_barras String?  @unique @db.VarChar(48)
+
+  venta_items VentaItem[]
 
   @@unique([producto_id, talla])
   @@index([producto_id])

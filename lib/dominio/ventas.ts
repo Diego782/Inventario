@@ -116,7 +116,16 @@ export async function registrarVenta(
 
         const productoMap = new Map(productos.map((p: any) => [p.id, p]))
 
-        // 3. Validar stock por ítem
+        // 2b. Cargar variantes referenciadas por los ítems (si las hay)
+        const varianteIds = input.items
+          .map((i) => i.variante_id)
+          .filter((v): v is string => !!v)
+        const variantes = varianteIds.length
+          ? await tx.varianteProducto.findMany({ where: { id: { in: varianteIds } } })
+          : []
+        const varianteMap = new Map(variantes.map((v: any) => [v.id, v]))
+
+        // 3. Validar stock por ítem (contra la variante si se indicó, si no contra el producto)
         for (const item of input.items) {
           const producto = productoMap.get(item.producto_id)
           if (!producto)
@@ -124,9 +133,21 @@ export async function registrarVenta(
               `Producto ${item.producto_id} no encontrado`
             )
 
-          const stockDisponible = (producto as any).stock_actual
-          if (!cfg.permitir_sobreventa && item.cantidad > stockDisponible) {
-            throw new StockNegativoError()
+          if (item.variante_id) {
+            const variante = varianteMap.get(item.variante_id)
+            if (!variante || variante.producto_id !== item.producto_id) {
+              throw new VentaFallidaError(
+                `Variante ${item.variante_id} no encontrada`
+              )
+            }
+            if (!cfg.permitir_sobreventa && item.cantidad > variante.stock_actual) {
+              throw new StockNegativoError()
+            }
+          } else {
+            const stockDisponible = (producto as any).stock_actual
+            if (!cfg.permitir_sobreventa && item.cantidad > stockDisponible) {
+              throw new StockNegativoError()
+            }
           }
         }
 
@@ -165,20 +186,16 @@ export async function registrarVenta(
 
         for (const item of input.items) {
           const producto = productoMap.get(item.producto_id) as any
-          const nuevoStock = producto.stock_actual - item.cantidad
-          // Estado de stock previo a la venta, calculado desde el snapshot bloqueado
-          // (FOR UPDATE). Se captura ANTES del update para detectar la transición a
-          // Crítico dentro de la misma transacción (R7.1, R7.6).
-          const estadoPrevio = estadoStock(producto.stock_actual, producto.stock_minimo)
           const subtotalLinea = redondearBancario(
             item.precio_unitario * item.cantidad
           )
 
-          // Insertar item de venta
+          // Insertar item de venta (registra la variante si aplica)
           const ventaItem = await tx.ventaItem.create({
             data: {
               venta_id: venta.id,
               producto_id: item.producto_id,
+              variante_id: item.variante_id ?? null,
               cantidad: item.cantidad,
               precio_unitario: item.precio_unitario,
               subtotal_linea: subtotalLinea,
@@ -187,11 +204,39 @@ export async function registrarVenta(
           })
           itemsCreados.push(ventaItem)
 
-          // Actualizar stock del producto
+          // Estado de stock previo del PRODUCTO (suma de variantes o stock directo),
+          // capturado ANTES del update para detectar transición a Crítico (R7.1, R7.6).
+          const estadoPrevio = estadoStock(producto.stock_actual, producto.stock_minimo)
+
+          let nuevoStockProducto: number
+
+          if (item.variante_id) {
+            // Descontar del stock de la variante
+            const variante = varianteMap.get(item.variante_id) as any
+            const nuevoStockVariante = variante.stock_actual - item.cantidad
+            await tx.varianteProducto.update({
+              where: { id: item.variante_id },
+              data: { stock_actual: nuevoStockVariante },
+            })
+            // Mantener el snapshot local sincronizado por si hay varios ítems de la misma variante
+            variante.stock_actual = nuevoStockVariante
+
+            // El stock del producto es la suma de todas sus variantes
+            const variantesProducto = await tx.varianteProducto.findMany({
+              where: { producto_id: item.producto_id },
+              select: { stock_actual: true },
+            })
+            nuevoStockProducto = variantesProducto.reduce((s, v) => s + v.stock_actual, 0)
+          } else {
+            nuevoStockProducto = producto.stock_actual - item.cantidad
+          }
+
+          // Actualizar stock del producto (raíz)
           await tx.producto.update({
             where: { id: item.producto_id },
-            data: { stock_actual: nuevoStock },
+            data: { stock_actual: nuevoStockProducto },
           })
+          producto.stock_actual = nuevoStockProducto
 
           // Registrar movimiento de stock
           await tx.movimientoStock.create({
@@ -199,8 +244,10 @@ export async function registrarVenta(
               producto_id: item.producto_id,
               tipo: "venta",
               cantidad: -item.cantidad,
-              stock_resultante: nuevoStock,
-              motivo: `Venta ${folio}`,
+              stock_resultante: nuevoStockProducto,
+              motivo: item.variante_id
+                ? `Venta ${folio} (talla ${(varianteMap.get(item.variante_id) as any)?.talla ?? ""})`
+                : `Venta ${folio}`,
               referencia_id: venta.id,
               usuario_id: input.usuario_id ?? null,
               organizacion_id: input.organizacion_id,
@@ -208,15 +255,12 @@ export async function registrarVenta(
           })
 
           // Detectar transición a stock crítico dentro de la misma transacción.
-          // Si la venta deja al producto en Crítico, se crea exactamente 1
-          // notificación (con dedupe lógica); si la transacción falla, no queda
-          // notificación al revertirse todo (R7.1, R7.2, R7.3, R7.6, R7.7).
           await detectarStockCritico(
             tx,
             {
               producto_id: item.producto_id,
               nombre: producto.nombre,
-              stock_actual: nuevoStock,
+              stock_actual: nuevoStockProducto,
               stock_minimo: producto.stock_minimo,
               organizacion_id: input.organizacion_id,
             },
@@ -335,7 +379,7 @@ export async function listarVentas(params: {
 export async function obtenerVenta(id: string, organizacion_id: string): Promise<VentaConItems | null> {
   return prisma.venta.findFirst({
     where: { id, organizacion_id },
-    include: { items: { include: { producto: true } } },
+    include: { items: { include: { producto: true, variante: true } } },
   })
 }
 
@@ -362,7 +406,7 @@ export async function editarVenta(
 
   return prisma.venta.findFirst({
     where: { id, organizacion_id },
-    include: { items: { include: { producto: true } } },
+    include: { items: { include: { producto: true, variante: true } } },
   })
 }
 
@@ -384,11 +428,32 @@ export async function eliminarVenta(id: string, organizacion_id: string): Promis
 
     // Revertir stock de cada ítem
     for (const item of venta.items) {
+      // Si el ítem se vendió contra una variante, devolver el stock a la variante
+      if (item.variante_id) {
+        const variante = await tx.varianteProducto.findFirst({
+          where: { id: item.variante_id, producto_id: item.producto_id },
+        })
+        if (variante) {
+          await tx.varianteProducto.update({
+            where: { id: variante.id },
+            data: { stock_actual: variante.stock_actual + item.cantidad },
+          })
+        }
+      }
+
       const producto = await tx.producto.findFirst({
         where: { id: item.producto_id, organizacion_id },
       })
       if (producto) {
-        const nuevoStock = producto.stock_actual + item.cantidad
+        // Recalcular el stock del producto: suma de variantes si tiene, si no suma directa
+        const variantesProducto = await tx.varianteProducto.findMany({
+          where: { producto_id: item.producto_id },
+          select: { stock_actual: true },
+        })
+        const nuevoStock =
+          variantesProducto.length > 0
+            ? variantesProducto.reduce((s, v) => s + v.stock_actual, 0)
+            : producto.stock_actual + item.cantidad
         await tx.producto.update({
           where: { id: item.producto_id },
           data: { stock_actual: nuevoStock },

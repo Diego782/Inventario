@@ -118,6 +118,11 @@ export function DetalleVentaDialog({
                             #{item.producto_id.slice(-8)}
                           </span>
                         )}
+                        {item.variante_talla && (
+                          <span className="ml-2 inline-flex items-center rounded bg-primary/10 text-primary px-1.5 py-0.5 text-xs font-semibold">
+                            Talla {item.variante_talla}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {formatMXN(item.precio_unitario)}

@@ -20,11 +20,12 @@ import {
 } from "@/components/ui/alert-dialog"
 import { CarritoTable } from "@/components/ventas/carrito-table"
 import { PagoForm } from "@/components/ventas/pago-form"
+import { AgregarProductoVenta } from "@/components/ventas/agregar-producto-venta"
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner"
 import { useCarritoVenta } from "@/hooks/use-carrito-venta"
 import { useConfiguracion } from "@/hooks/use-configuracion"
 import { toastDeError } from "@/lib/mensajes-error"
-import type { VentaDTO } from "@/lib/api/serializadores"
+import type { ProductoDTO, VentaDTO } from "@/lib/api/serializadores"
 
 interface NuevaVentaDialogProps {
   open: boolean
@@ -75,7 +76,15 @@ export function NuevaVentaDialog({
         refocusHidden()
         return
       }
-      const producto = await res.json()
+      const producto: ProductoDTO = await res.json()
+
+      // Si el producto maneja tallas, no podemos asumir cuál; pedir selección
+      if ((producto.variantes?.length ?? 0) > 0) {
+        toast.info(`${producto.nombre} tiene tallas. Selecciona la talla abajo.`)
+        refocusHidden()
+        return
+      }
+
       const { excedeStock } = carrito.agregarOIncrementar(producto)
       if (excedeStock) {
         toast.error(`Stock insuficiente para ${producto.nombre}`)
@@ -165,16 +174,32 @@ export function NuevaVentaDialog({
 
           <div className="flex flex-col lg:flex-row gap-6">
             {/* Carrito — crece para ocupar el espacio disponible */}
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 space-y-3">
+              <AgregarProductoVenta
+                onAgregarSimple={(producto) => {
+                  const { excedeStock } = carrito.agregarOIncrementar(producto)
+                  if (excedeStock) toast.error(`Stock insuficiente para ${producto.nombre}`)
+                  refocusHidden()
+                }}
+                onAgregarVariante={(producto, variante, cantidad) => {
+                  const { excedeStock } = carrito.agregarConVariante(producto, variante, cantidad)
+                  if (excedeStock) {
+                    toast.error(`Stock insuficiente para ${producto.nombre} talla ${variante.talla}`)
+                  } else {
+                    toast.success(`${producto.nombre} (talla ${variante.talla}) agregado`)
+                  }
+                  refocusHidden()
+                }}
+              />
               <CarritoTable
                 items={carrito.items}
                 totales={carrito.totales}
-                onCambiarCantidad={(id, cantidad) => {
-                  carrito.setCantidad(id, cantidad)
+                onCambiarCantidad={(clave, cantidad) => {
+                  carrito.setCantidad(clave, cantidad)
                   refocusHidden()
                 }}
-                onEliminar={(id) => {
-                  carrito.eliminar(id)
+                onEliminar={(clave) => {
+                  carrito.eliminar(clave)
                   refocusHidden()
                 }}
               />

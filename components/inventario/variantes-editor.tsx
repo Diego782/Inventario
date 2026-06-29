@@ -21,18 +21,37 @@ interface VariantesEditorProps {
   onCambio: () => void
 }
 
-export function VariantesEditor({ productoId, variantes, onCambio }: VariantesEditorProps) {
+export function VariantesEditor({ productoId, variantes: variantesIniciales, onCambio }: VariantesEditorProps) {
+  const [variantes, setVariantes] = useState<VarianteDTO[]>(variantesIniciales)
   const [tallasDisponibles, setTallasDisponibles] = useState<string[]>([])
   const [nuevaTalla, setNuevaTalla] = useState("")
   const [nuevoStock, setNuevoStock] = useState(0)
   const [agregando, setAgregando] = useState(false)
   const [gestionarTallas, setGestionarTallas] = useState(false)
 
+  // Sincronizar si cambian las variantes provistas (p. ej. al abrir otro producto)
+  useEffect(() => { setVariantes(variantesIniciales) }, [variantesIniciales])
+
   function cargarTallas() {
     fetch("/api/tallas")
       .then((r) => r.json())
       .then((data) => setTallasDisponibles(Array.isArray(data) ? data : []))
       .catch(() => {})
+  }
+
+  // Recarga las variantes desde la API para reflejar cambios sin cerrar el diálogo
+  async function recargarVariantes() {
+    try {
+      const res = await fetch(`/api/productos/${productoId}/variantes`)
+      if (res.ok) {
+        const data = await res.json()
+        setVariantes(Array.isArray(data) ? data : [])
+      }
+    } catch {
+      // Silencioso: se mantiene el estado previo
+    }
+    // Notificar al padre para refrescar la tabla/resumen subyacente
+    onCambio()
   }
 
   useEffect(() => { cargarTallas() }, [])
@@ -58,7 +77,7 @@ export function VariantesEditor({ productoId, variantes, onCambio }: VariantesEd
       }
       setNuevaTalla("")
       setNuevoStock(0)
-      onCambio()
+      await recargarVariantes()
       toast.success(`Talla ${nuevaTalla} agregada`)
     } catch {
       toast.error("Error de conexión")
@@ -79,7 +98,7 @@ export function VariantesEditor({ productoId, variantes, onCambio }: VariantesEd
         toast.error(data?.error?.mensaje ?? "Error al actualizar stock")
         return
       }
-      onCambio()
+      await recargarVariantes()
     } catch {
       toast.error("Error de conexión")
     }
@@ -98,7 +117,7 @@ export function VariantesEditor({ productoId, variantes, onCambio }: VariantesEd
         toast.error(data?.error?.mensaje ?? "Error al eliminar")
         return
       }
-      onCambio()
+      await recargarVariantes()
       toast.success(`Talla ${talla} eliminada`)
     } catch {
       toast.error("Error de conexión")

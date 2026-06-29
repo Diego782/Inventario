@@ -8,8 +8,10 @@ import { useState, useMemo } from "react"
 import {
   calcularTotales,
   agregarOIncrementar,
+  agregarConVariante,
   setCantidad as setCantidadPura,
   eliminarItem,
+  claveItem,
   serializarParaApi,
   type ItemCarrito,
   type CarritoTotales,
@@ -20,10 +22,16 @@ export type UseCarritoVenta = {
   items: ItemCarrito[]
   totales: CarritoTotales
   agregarOIncrementar: (producto: ProductoDTO) => { excedeStock: boolean }
-  setCantidad: (producto_id: string, cantidad: number) => void
-  eliminar: (producto_id: string) => void
+  agregarConVariante: (
+    producto: ProductoDTO,
+    variante: { id: string; talla: string; stock_actual: number },
+    cantidad: number
+  ) => { excedeStock: boolean }
+  setCantidad: (clave: string, cantidad: number) => void
+  eliminar: (clave: string) => void
   limpiar: () => void
   serializarParaApi: () => ReturnType<typeof serializarParaApi>
+  claveItem: typeof claveItem
 }
 
 /**
@@ -47,12 +55,22 @@ export function useCarritoVenta(
     return { excedeStock: resultado.excedeStock }
   }
 
-  const setCantidad = (producto_id: string, cantidad: number): void => {
-    setItems((prev) => setCantidadPura(prev, producto_id, cantidad, permitir_sobreventa))
+  const agregarVariante = (
+    producto: ProductoDTO,
+    variante: { id: string; talla: string; stock_actual: number },
+    cantidad: number
+  ): { excedeStock: boolean } => {
+    const resultado = agregarConVariante(items, producto, variante, cantidad, permitir_sobreventa)
+    setItems(resultado.items)
+    return { excedeStock: resultado.excedeStock }
   }
 
-  const eliminar = (producto_id: string): void => {
-    setItems((prev) => eliminarItem(prev, producto_id))
+  const setCantidad = (clave: string, cantidad: number): void => {
+    setItems((prev) => setCantidadPura(prev, clave, cantidad, permitir_sobreventa))
+  }
+
+  const eliminar = (clave: string): void => {
+    setItems((prev) => eliminarItem(prev, clave))
   }
 
   const limpiar = (): void => {
@@ -67,9 +85,11 @@ export function useCarritoVenta(
     items,
     totales,
     agregarOIncrementar: agregar,
+    agregarConVariante: agregarVariante,
     setCantidad,
     eliminar,
     limpiar,
     serializarParaApi: serializar,
+    claveItem,
   }
 }

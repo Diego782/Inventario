@@ -75,6 +75,12 @@ export function InventarioSection() {
     setRefreshKey((k) => k + 1)
   }
 
+  // Refresca los datos SIN cerrar el diálogo (útil para ajustes de stock por
+  // variante, donde el usuario suele agregar/editar varias tallas seguidas).
+  function handleRefrescarSinCerrar() {
+    setRefreshKey((k) => k + 1)
+  }
+
   return (
     <div className="space-y-6">
       {/* Header Actions */}
@@ -165,7 +171,7 @@ export function InventarioSection() {
         open={estadoDialog.tipo === "ajustar-stock"}
         producto={productoSeleccionado}
         onClose={handleCerrarDialog}
-        onAjustado={handleCerrarDialog}
+        onAjustado={handleRefrescarSinCerrar}
       />
 
       {/* Dialog historial de movimientos — Tarea 10.10 */}

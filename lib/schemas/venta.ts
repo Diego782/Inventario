@@ -2,6 +2,7 @@ import { z } from "zod"
 
 export const crearVentaItemSchema = z.object({
   producto_id: z.string().uuid("ID de producto inválido"),
+  variante_id: z.string().uuid("ID de variante inválido").optional().nullable(),
   cantidad: z.number().int().positive("La cantidad debe ser un entero positivo"),
   precio_unitario: z.number().nonnegative("El precio unitario no puede ser negativo"),
 })

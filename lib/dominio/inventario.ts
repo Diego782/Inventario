@@ -235,6 +235,7 @@ export async function ajustarStock(
 export async function obtenerPorCodigo(codigo: string, organizacion_id: string): Promise<Producto | null> {
   return prisma.producto.findFirst({
     where: { codigo_barras: codigo, organizacion_id },
+    include: { variantes: true },
   })
 }
 

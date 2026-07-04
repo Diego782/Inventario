@@ -72,6 +72,7 @@ const ETIQUETA_SECCION: Record<Seccion, string> = {
   horarios: "Horarios",
   configuracion: "Configuración",
   usuarios: "Empleados",
+  clientes: "Clientes",
 }
 
 const ETIQUETA_ACCION: Record<Accion, string> = {
@@ -317,7 +318,7 @@ export function RolFormDialog({
                                   className="border-t border-border/50"
                                 >
                                   <td className="py-2 pr-4 font-medium">
-                                    {ETIQUETA_SECCION[seccion]}
+                                    {ETIQUETA_SECCION[seccion] ?? (seccion.charAt(0).toUpperCase() + seccion.slice(1))}
                                   </td>
                                   {ACCIONES.map((accion) => {
                                     const checked = tienePermiso(

@@ -45,13 +45,13 @@ CREATE TABLE IF NOT EXISTS `movimientos_deuda` (
 
 -- AddColumn: cliente_id nullable en ventas (Req 11.2, 11.5)
 -- NULL preserva las ventas históricas sin cliente, incluidas las fiadas (Req 11.3).
-ALTER TABLE `ventas` ADD COLUMN IF NOT EXISTS `cliente_id` CHAR(36) NULL;
+ALTER TABLE `ventas` ADD COLUMN `cliente_id` CHAR(36) NULL;
 
 -- AddColumn: plazo_deuda nullable en ventas (Req 6.4, 11.2)
-ALTER TABLE `ventas` ADD COLUMN IF NOT EXISTS `plazo_deuda` DATETIME(3) NULL;
+ALTER TABLE `ventas` ADD COLUMN `plazo_deuda` DATETIME(3) NULL;
 
 -- CreateIndex: ventas.cliente_id para FK lookup eficiente
-CREATE INDEX IF NOT EXISTS `ventas_cliente_id_idx` ON `ventas`(`cliente_id`);
+CREATE INDEX `ventas_cliente_id_idx` ON `ventas`(`cliente_id`);
 
 -- AddForeignKey: clientes → organizaciones
 ALTER TABLE `clientes`

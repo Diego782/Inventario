@@ -37,8 +37,7 @@ const ORDEN_SECCIONES = [
   "Inventario",
   "Ventas",
   "Clientes",
-  // BETA: "Fiadores" oculto — se habilitará en próxima versión
-  // "Fiadores",
+  "Fiadores",
   "Empleados",
   "Horarios",
   "Configuracion",
@@ -83,9 +82,8 @@ function AppShell() {
         return <VentasSection />
       case "Clientes":
         return <ClientesSection />
-      // BETA: Módulo Fiadores oculto — se habilitará en próxima versión
-      // case "Fiadores":
-      //   return <FiadoresSection />
+      case "Fiadores":
+        return <FiadoresSection />
       case "Empleados":
         return <UsuariosSection />
       case "Horarios":

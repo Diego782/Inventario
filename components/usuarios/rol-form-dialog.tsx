@@ -290,7 +290,7 @@ export function RolFormDialog({
                   <FormItem>
                     <FormLabel>Permisos</FormLabel>
                     <FormControl>
-                      <ScrollArea className="h-64 rounded-md border">
+                      <ScrollArea className="h-80 rounded-md border">
                         <div className="p-3">
                           <table className="w-full text-sm">
                             <thead>
@@ -309,10 +309,7 @@ export function RolFormDialog({
                               </tr>
                             </thead>
                             <tbody>
-                              {SECCIONES.filter(
-                                // BETA: fila Fiadores oculta — módulo no disponible en esta versión
-                                (s) => s !== "fiadores"
-                              ).map((seccion) => (
+                              {SECCIONES.map((seccion) => (
                                 <tr
                                   key={seccion}
                                   className="border-t border-border/50"

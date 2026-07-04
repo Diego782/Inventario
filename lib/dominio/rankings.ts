@@ -62,18 +62,28 @@ import type {
 
 const TZ_DEFAULT = "America/Mexico_City"
 
+/**
+ * Calcula los cuatro rankings del Dashboard_Analitico para el rango `[desde, hasta]`
+ * interpretado en `tz`, restringidos exclusivamente a registros de `organizacion_id`
+ * (Req 1.2, 1.5). Sin registros del tenant → `topSelling` y `topRotation` vacíos;
+ * `lowRotation` poblado con los productos activos del tenant y cero salidas (Req 1.6).
+ */
 export async function calcularRankings(
   desde: string,
   hasta: string,
   limite: number,
+  organizacion_id: string,
   tz: string = process.env.TZ ?? TZ_DEFAULT,
 ): Promise<RankingsDTO> {
   const limites = limitesUtc(desde, hasta, tz)
   const enRango = { gte: limites.inicio, lte: limites.fin }
 
-  // ── topSelling: ítems de ventas completadas en el rango, agregados por producto ──
+  // ── topSelling: ítems de ventas completadas en el rango, del tenant, agregados por producto ──
   const itemsVenta = await prisma.ventaItem.findMany({
-    where: { venta: { estado: "completada", creado_en: enRango } },
+    where: {
+      organizacion_id,
+      venta: { estado: "completada", creado_en: enRango, organizacion_id },
+    },
     select: {
       producto_id: true,
       cantidad: true,
@@ -107,8 +117,9 @@ export async function calcularRankings(
     montoVendido: redondearBancario(r.montoVendido), // R3.11
   }))
 
-  // ── topMargin: margen unitario por producto (precio_venta − precio_compra) ──
+  // ── topMargin: margen unitario por producto del tenant (precio_venta − precio_compra) ──
   const productos = await prisma.producto.findMany({
+    where: { organizacion_id },
     select: { id: true, nombre: true, precio_compra: true, precio_venta: true, activo: true },
   })
 
@@ -119,9 +130,9 @@ export async function calcularRankings(
   }))
   const topMargin: RankingItemMargen[] = ordenarRanking(margenItems, "margen", "desc", limite)
 
-  // ── Salidas por producto en el rango (movimientos que decrementan stock) ──
+  // ── Salidas por producto en el rango, del tenant (movimientos que decrementan stock) ──
   const movimientos = await prisma.movimientoStock.findMany({
-    where: { creado_en: enRango, cantidad: { lt: 0 } },
+    where: { organizacion_id, creado_en: enRango, cantidad: { lt: 0 } },
     select: {
       producto_id: true,
       cantidad: true,
@@ -136,7 +147,7 @@ export async function calcularRankings(
     salidaPorProducto.set(m.producto_id, prev)
   }
 
-  // ── topRotation: productos con mayor salida, desc (R3.8) ──
+  // ── topRotation: productos del tenant con mayor salida, desc (R3.8) ──
   const rotacionItems: RankingItemRotacion[] = [...salidaPorProducto.entries()].map(
     ([producto_id, v]) => ({ producto_id, nombre: v.nombre, unidadesSalida: v.unidadesSalida }),
   )
@@ -147,7 +158,7 @@ export async function calcularRankings(
     limite,
   )
 
-  // ── lowRotation: productos ACTIVOS con menor salida, asc, incluyendo ceros (R3.9, R3.12) ──
+  // ── lowRotation: productos ACTIVOS del tenant con menor salida, asc, incluyendo ceros (R3.9, R3.12, Req 1.6) ──
   const lowRotationItems: RankingItemRotacion[] = productos
     .filter((p) => p.activo)
     .map((p) => ({

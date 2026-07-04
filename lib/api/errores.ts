@@ -80,6 +80,69 @@ export class ConsultaTimeoutError extends Error {
   }
 }
 
+export class DescuentoInvalidoError extends Error {
+  constructor(mensaje?: string) {
+    super(mensaje ?? "DESCUENTO_INVALIDO")
+    this.name = "DescuentoInvalidoError"
+  }
+}
+
+export class TallaInvalidaError extends Error {
+  constructor() {
+    super("TALLA_INVALIDA")
+    this.name = "TallaInvalidaError"
+  }
+}
+
+export class CedulaDuplicadaError extends Error {
+  constructor() {
+    super("CEDULA_DUPLICADA")
+    this.name = "CedulaDuplicadaError"
+  }
+}
+
+export class ClienteNoEncontradoError extends Error {
+  constructor() {
+    super("CLIENTE_NO_ENCONTRADO")
+    this.name = "ClienteNoEncontradoError"
+  }
+}
+
+export class ClienteConHistorialError extends Error {
+  constructor() {
+    super("CLIENTE_CON_HISTORIAL")
+    this.name = "ClienteConHistorialError"
+  }
+}
+
+export class ClienteRequeridoError extends Error {
+  constructor() {
+    super("CLIENTE_REQUERIDO")
+    this.name = "ClienteRequeridoError"
+  }
+}
+
+export class PlazoDeudaInvalidoError extends Error {
+  constructor() {
+    super("PLAZO_DEUDA_INVALIDO")
+    this.name = "PlazoDeudaInvalidoError"
+  }
+}
+
+export class AbonoInvalidoError extends Error {
+  constructor(mensaje?: string) {
+    super(mensaje ?? "ABONO_INVALIDO")
+    this.name = "AbonoInvalidoError"
+  }
+}
+
+export class PlazoExtensionInvalidoError extends Error {
+  constructor() {
+    super("PLAZO_EXTENSION_INVALIDO")
+    this.name = "PlazoExtensionInvalidoError"
+  }
+}
+
 /**
  * Mapea cualquier error (Prisma o dominio) a una Response HTTP.
  * Nunca filtra stack traces al cliente.
@@ -94,6 +157,15 @@ export function mapPrismaError(e: unknown): Response {
   if (e instanceof VentaTimeoutError) return errorServidor("VENTA_TIMEOUT", 504)
   if (e instanceof ConsultaTimeoutError) return errorServidor("CONSULTA_TIMEOUT", 504)
   if (e instanceof NotificacionNoEncontradaError) return errorNoEncontrado("NOTIFICACION_NO_ENCONTRADA")
+  if (e instanceof TallaInvalidaError) return errorPeticion("TALLA_INVALIDA")
+  if (e instanceof DescuentoInvalidoError) return errorPeticion("DESCUENTO_INVALIDO")
+  if (e instanceof CedulaDuplicadaError) return errorConflicto("CEDULA_DUPLICADA")
+  if (e instanceof ClienteNoEncontradoError) return errorNoEncontrado("CLIENTE_NO_ENCONTRADO")
+  if (e instanceof ClienteConHistorialError) return errorConflicto("CLIENTE_CON_HISTORIAL")
+  if (e instanceof ClienteRequeridoError) return errorConflicto("CLIENTE_REQUERIDO", 422)
+  if (e instanceof PlazoDeudaInvalidoError) return errorConflicto("PLAZO_DEUDA_INVALIDO", 422)
+  if (e instanceof AbonoInvalidoError) return errorConflicto("ABONO_INVALIDO", 422)
+  if (e instanceof PlazoExtensionInvalidoError) return errorConflicto("PLAZO_EXTENSION_INVALIDO", 422)
   if (e instanceof VentaFallidaError) return errorServidor("VENTA_FALLIDA")
 
   // Errores de Prisma

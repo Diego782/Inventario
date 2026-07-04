@@ -91,6 +91,13 @@ const MENSAJES: Record<string, string> = {
   NO_ENCONTRADO: "Recurso no encontrado.",
   RED: "Error de conexión. Revise el servidor.",
   IMPRESION_FALLIDA: "No se pudo enviar la etiqueta a la impresora.",
+  CEDULA_DUPLICADA: "Esa cédula ya está registrada para esta organización.",
+  CLIENTE_NO_ENCONTRADO: "Cliente no encontrado.",
+  CLIENTE_CON_HISTORIAL: "No se puede eliminar el cliente porque tiene historial asociado.",
+  CLIENTE_REQUERIDO: "Se requiere un cliente para este tipo de venta.",
+  PLAZO_DEUDA_INVALIDO: "El plazo de deuda debe ser igual o posterior a la fecha de hoy.",
+  ABONO_INVALIDO: "El abono no es válido. Verifique el monto.",
+  PLAZO_EXTENSION_INVALIDO: "La nueva fecha debe ser posterior al plazo de deuda vigente.",
 }
 
 export function mensajePorCodigo(codigo: string): string {

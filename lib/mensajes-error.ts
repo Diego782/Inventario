@@ -20,6 +20,10 @@ export const MENSAJES_ERROR: Record<string, string> = {
   CATEGORIA_DUPLICADA: "Ya existe una categoría con ese nombre.",
   CONFLICTO: "Conflicto al guardar.",
   RED: "Error de conexión. Revise el servidor.",
+  // Clientes
+  CEDULA_DUPLICADA: "Esa cédula ya está registrada en esta organización.",
+  CLIENTE_NO_ENCONTRADO: "Cliente no encontrado.",
+  CLIENTE_CON_HISTORIAL: "No se puede eliminar: el cliente tiene ventas o movimientos de deuda.",
 }
 
 /**

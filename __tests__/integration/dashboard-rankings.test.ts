@@ -13,12 +13,11 @@
 //   - lowRotation: productos activos asc por salida, INCLUYENDO un producto con CERO
 //                  salidas, desempate id asc (R3.9, R3.12).
 //
-// `calcularRankings` agrega sobre TODOS los productos (no por organización) para
-// topMargin/lowRotation, por lo que el dataset preexistente podría aparecer en esas
-// listas. Para que las aserciones sean deterministas se usa un `limite` amplio (de modo
-// que nada se trunca) y se FILTRAN las listas resultantes a los IDs sembrados aquí;
-// como `ordenarRanking` aplica un orden global estable, el orden relativo del subconjunto
-// sembrado se preserva y puede compararse contra el modelo esperado.
+// `calcularRankings` agrega únicamente sobre los productos y movimientos de
+// `ORG_DEFAULT`, por lo que el dataset preexistente de otras organizaciones no
+// afecta a estas aserciones. Para que las aserciones sean deterministas se usa
+// un `limite` amplio (de modo que nada se trunca) y se FILTRAN las listas
+// resultantes a los IDs sembrados aquí.
 //
 // Validates: Requirements R3.6, R3.9, R3.11, R3.12
 import { describe, it, expect, beforeAll, afterAll } from "vitest"
@@ -195,7 +194,7 @@ describe.skipIf(SKIP_DB || !TIENE_BD)(
 
     it("verifica numéricamente topSelling, topMargin, topRotation y lowRotation", async () => {
       const idSet = new Set(PRODUCTOS.map((p) => p.id))
-      const dto = await calcularRankings(DESDE, HASTA, LIMITE, TZ)
+      const dto = await calcularRankings(DESDE, HASTA, LIMITE, ORG_DEFAULT, TZ)
 
       // ── topSelling: unidades desc, desempate id asc, monto redondeado (R3.6, R3.9, R3.11) ──
       const ventasEsperadas = PRODUCTOS.filter((p) => p.unidadesVendidas > 0).sort(

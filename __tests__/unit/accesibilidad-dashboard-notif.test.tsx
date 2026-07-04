@@ -113,8 +113,10 @@ const notificacionNoLeida = {
   titulo: "Stock crítico: Producto A",
   mensaje: "El producto A alcanzó stock crítico.",
   producto_id: "prod-1",
+  venta_id: null,
   leida: false,
   creado_en: new Date(Date.now() - 60_000).toISOString(), // hace 1 min
+  acciones_rapidas: [] as import("@/lib/api/serializadores").AccionRapida[],
 }
 
 const notificacionLeida = {

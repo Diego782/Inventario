@@ -3,20 +3,25 @@
  * Capa de dominio para operaciones de ventas.
  * registrarVenta ejecuta una transacción atómica que:
  * 1. Valida stock por ítem
- * 2. Calcula totales con redondeo bancario
- * 3. Genera folio único dentro de la misma transacción
- * 4. Inserta venta + items + movimientos de stock
- * 5. Descuenta stock de cada producto
+ * 2. Calcula totales con descuentos y redondeo bancario (via calcularTotalesVenta)
+ * 3. Valida cliente/plazo para ventas fiadas y crea el cargo de deuda
+ * 4. Genera folio único dentro de la misma transacción
+ * 5. Inserta venta + items + movimientos de stock
+ * 6. Descuenta stock de cada producto
  */
 import { prisma } from "@/lib/db"
 import { generarFolio } from "@/lib/dominio/folio"
-import { redondearBancario } from "@/lib/money"
 import {
   StockNegativoError,
   LimiteFolioDiarioError,
   VentaFallidaError,
+  ClienteNoEncontradoError,
+  PlazoDeudaInvalidoError,
+  DescuentoInvalidoError,
 } from "@/lib/api/errores"
-import { detectarStockCritico, estadoStock } from "@/lib/dominio/notificaciones"
+import { detectarStockCritico, detectarStockCero, estadoStock } from "@/lib/dominio/notificaciones"
+import { calcularTotalesVenta } from "@/lib/dominio/descuentos"
+import { crearCargoDeuda } from "@/lib/dominio/deuda"
 import { CONFIG_DEFAULTS, COLOR_TEMA_DEGO } from "@/lib/schemas/configuracion"
 import type { ConfiguracionMap } from "@/lib/schemas/configuracion"
 import type { CrearVentaInput } from "@/lib/schemas/venta"
@@ -151,22 +156,51 @@ export async function registrarVenta(
           }
         }
 
-        // 4. Calcular totales con redondeo bancario (defensa en profundidad)
-        const subtotal = redondearBancario(
-          input.items.reduce(
-            (acc, i) => acc + i.precio_unitario * i.cantidad,
-            0
-          )
+        // 4. Calcular totales con descuentos y redondeo bancario (Req 7)
+        const lineas = input.items.map((i) => ({
+          precio_unitario: i.precio_unitario,
+          cantidad: i.cantidad,
+          descuento_producto: i.descuento_producto,
+        }))
+        const totales = calcularTotalesVenta(
+          lineas,
+          input.descuento_total ?? 0,
+          cfg.porcentaje_impuesto
         )
-        const impuesto = redondearBancario(
-          (subtotal * cfg.porcentaje_impuesto) / 100
-        )
-        const total = redondearBancario(subtotal + impuesto)
+        const { subtotal, impuesto, total } = totales
+
+        // 4b. Validaciones para venta fiada (Req 6.3, 6.4, 6.5, 6.8, 6.9)
+        const fechaVenta = new Date()
+        if (input.metodo_pago === "fiado") {
+          // Req 6.3, 6.9: cliente_id requerido y debe existir en el tenant
+          if (!input.cliente_id) {
+            throw new ClienteNoEncontradoError()
+          }
+          const clienteExiste = await tx.cliente.findFirst({
+            where: { id: input.cliente_id, organizacion_id: input.organizacion_id },
+            select: { id: true },
+          })
+          if (!clienteExiste) {
+            throw new ClienteNoEncontradoError()
+          }
+
+          // Req 6.4, 6.5: plazo_deuda requerido y >= fecha de la venta
+          if (!input.plazo_deuda) {
+            throw new PlazoDeudaInvalidoError()
+          }
+          const plazo = new Date(input.plazo_deuda)
+          plazo.setHours(0, 0, 0, 0)
+          const fechaVentaNormalizada = new Date(fechaVenta)
+          fechaVentaNormalizada.setHours(0, 0, 0, 0)
+          if (plazo < fechaVentaNormalizada) {
+            throw new PlazoDeudaInvalidoError()
+          }
+        }
 
         // 5. Generar folio único dentro de la misma transacción
-        const folio = await generarFolio(tx, new Date(), input.organizacion_id)
+        const folio = await generarFolio(tx, fechaVenta, input.organizacion_id)
 
-        // 6. Insertar la venta
+        // 6. Insertar la venta con cliente_id y plazo_deuda (Req 6.2, 6.7)
         const venta = await tx.venta.create({
           data: {
             folio,
@@ -175,6 +209,8 @@ export async function registrarVenta(
             total,
             metodo_pago: input.metodo_pago as any,
             fiador_id: input.fiador_id ?? null,
+            cliente_id: input.cliente_id ?? null,
+            plazo_deuda: input.plazo_deuda ?? null,
             usuario_id: input.usuario_id ?? null,
             organizacion_id: input.organizacion_id,
             estado: "completada",
@@ -184,11 +220,11 @@ export async function registrarVenta(
         // 7. Insertar items y actualizar stock + movimientos
         const itemsCreados: VentaItem[] = []
 
-        for (const item of input.items) {
+        for (let idx = 0; idx < input.items.length; idx++) {
+          const item = input.items[idx]
           const producto = productoMap.get(item.producto_id) as any
-          const subtotalLinea = redondearBancario(
-            item.precio_unitario * item.cantidad
-          )
+          // Use the pre-computed subtotal from calcularTotalesVenta (Req 7)
+          const subtotalLinea = totales.subtotalesLinea[idx]
 
           // Insertar item de venta (registra la variante si aplica)
           const ventaItem = await tx.ventaItem.create({
@@ -266,6 +302,29 @@ export async function registrarVenta(
             },
             estadoPrevio
           )
+
+          // Detectar stock cero dentro de la misma transacción (Req 8.1).
+          await detectarStockCero(
+            tx,
+            {
+              producto_id: item.producto_id,
+              nombre: producto.nombre,
+              stock_actual: nuevoStockProducto,
+              organizacion_id: input.organizacion_id,
+            }
+          )
+        }
+
+        // 8. Crear cargo de deuda si la venta es fiada (Req 6.6, 6.10)
+        // Si el cargo falla, la $transaction revierte toda la venta automáticamente.
+        if (input.metodo_pago === "fiado" && input.cliente_id) {
+          await crearCargoDeuda(tx, {
+            cliente_id: input.cliente_id,
+            organizacion_id: input.organizacion_id,
+            monto: total,
+            venta_id: venta.id,
+            plazo: input.plazo_deuda ?? undefined,
+          })
         }
 
         return { ...venta, items: itemsCreados }
@@ -277,7 +336,10 @@ export async function registrarVenta(
     if (
       e instanceof StockNegativoError ||
       e instanceof LimiteFolioDiarioError ||
-      e instanceof VentaFallidaError
+      e instanceof VentaFallidaError ||
+      e instanceof ClienteNoEncontradoError ||
+      e instanceof PlazoDeudaInvalidoError ||
+      e instanceof DescuentoInvalidoError
     ) {
       throw e
     }

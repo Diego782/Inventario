@@ -21,7 +21,7 @@
 // pruebas de integración que invocan los handlers con `NextRequest`/`Request`.
 //
 // Validates: Requirements R2.14, R3.13, R8.11
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import { NextRequest } from "next/server"
 
 const CONTENT_TYPE = "application/json; charset=utf-8"
@@ -34,7 +34,33 @@ function reqGet(path: string): NextRequest {
   return new NextRequest(`${BASE}${path}`)
 }
 
+// Contexto válido que permite llegar a la validación de query params.
+function ctxValido(organizacion_id = "00000000-0000-4000-8000-000000000001") {
+  return {
+    ctx: {
+      usuarioActual: { id: "usr-001", correo: "test@test.com", nombre: "Test" },
+      organizacionActiva: { id: organizacion_id, nombre: "Org Test", slug: "org-test" },
+      rol: "propietario",
+      permisos: [{ seccion: "dashboard", accion: "ver" }, { seccion: "notificaciones", accion: "ver" }, { seccion: "notificaciones", accion: "editar" }],
+      sesionId: "ses-001",
+    },
+  }
+}
+
 describe("Smoke — Content-Type de endpoints de dashboard y notificaciones", () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    // Mockear resolverContexto para que no llame a cookies() (fuera del contexto Next.js).
+    vi.doMock("@/lib/auth/contexto-request", () => ({
+      resolverContexto: vi.fn().mockResolvedValue(ctxValido()),
+    }))
+    // Mockear totalesDeuda para evitar llamadas a la BD en calcularMetricas.
+    vi.doMock("@/lib/dominio/deuda", () => ({
+      totalesDeuda: vi.fn().mockResolvedValue({ totalClientesConDeuda: 0, totalDeudaPendiente: 0 }),
+    }))
+  })
+
   // --- Caminos de validación (422), sin BD ---
 
   it("GET /api/dashboard/metricas (422 sin parámetros) responde JSON utf-8", async () => {

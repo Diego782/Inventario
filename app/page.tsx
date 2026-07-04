@@ -28,6 +28,7 @@ import { FiadoresSection } from "@/components/sections/fiadores-section"
 import { HorariosSection } from "@/components/sections/horarios-section"
 import { ConfiguracionSection } from "@/components/sections/configuracion-section"
 import { UsuariosSection } from "@/components/sections/usuarios-section"
+import { ClientesSection } from "@/components/sections/clientes-section"
 import { LABEL_A_SECCION } from "@/lib/auth/secciones"
 
 // Orden de secciones para calcular la sección inicial por permiso
@@ -35,6 +36,7 @@ const ORDEN_SECCIONES = [
   "Dashboard",
   "Inventario",
   "Ventas",
+  "Clientes",
   // BETA: "Fiadores" oculto — se habilitará en próxima versión
   // "Fiadores",
   "Empleados",
@@ -79,6 +81,8 @@ function AppShell() {
         return <InventarioSection />
       case "Ventas":
         return <VentasSection />
+      case "Clientes":
+        return <ClientesSection />
       // BETA: Módulo Fiadores oculto — se habilitará en próxima versión
       // case "Fiadores":
       //   return <FiadoresSection />

@@ -169,7 +169,7 @@ describe.skipIf(SKIP_DB || !TIENE_BD)(
     // ─── R2.13: sin registros, las 4 métricas valen 0 ───
     it("sin registros en el rango, las cuatro métricas valen 0", async () => {
       await limpiarTransaccional()
-      const dto = await calcularMetricas("2099-01-01", "2099-01-31", TZ)
+      const dto = await calcularMetricas("2099-01-01", "2099-01-31", TZ, ORG_DEFAULT)
       expect(dto.totalSales.actual).toBe(0)
       expect(dto.totalReturns.actual).toBe(0)
       expect(dto.totalExpenses.actual).toBe(0)
@@ -312,7 +312,7 @@ describe.skipIf(SKIP_DB || !TIENE_BD)(
           }
 
           const esperado = calcularModelo(PRODUCTOS, ventas, devoluciones, desde, hasta, TZ)
-          const dto = await calcularMetricas(desde, hasta, TZ)
+          const dto = await calcularMetricas(desde, hasta, TZ, ORG_DEFAULT)
 
           // 1) Coincidencia exacta (en centavos) con el modelo inclusivo.
           if (cents(dto.totalSales.actual) !== cents(esperado.totalSales)) return false

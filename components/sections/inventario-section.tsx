@@ -5,13 +5,13 @@
  * Sección principal de Inventario.
  * Orquesta la barra de búsqueda, las tarjetas de resumen, la tabla de productos
  * y el estado de qué diálogo está abierto.
- * Requisitos: R3.1, R4.1, R5.1, R6.1, R6.2, R6.3, R6.4, R8.1, R8.2, R12.1, R13.1, R22.1, R22.2
+ * Requisitos: R2.1, R2.9, R3.1, R4.1, R5.1, R6.1, R6.2, R6.3, R6.4, R8.1, R8.2, R12.1, R13.1, R22.1, R22.2
  */
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Plus } from "lucide-react"
+import { Search, Plus, TrendingUp, ShoppingCart } from "lucide-react"
 import { InventarioTable } from "@/components/inventario/inventario-table"
 import { FiltrosInventario, type FiltrosInventario as FiltrosInventarioTipo } from "@/components/inventario/filtros-inventario"
 import { ProductoFormDialog } from "@/components/inventario/producto-form-dialog"
@@ -19,6 +19,7 @@ import { EliminarProductoDialog } from "@/components/inventario/eliminar-product
 import { AjustarStockDialog } from "@/components/inventario/ajustar-stock-dialog"
 import { HistorialMovimientosDialog } from "@/components/inventario/historial-movimientos-dialog"
 import { ImprimirEtiquetaDialog } from "@/components/inventario/imprimir-etiqueta-dialog"
+import { StatCard } from "@/components/stat-card"
 import type { ProductoDTO } from "@/lib/api/serializadores"
 
 // ---- Tipos ----
@@ -37,6 +38,21 @@ type ResumenInventario = {
   critico: number
 }
 
+type ValorInventario = {
+  inversion: number
+  recaudacion_potencial: number
+}
+
+// ---- Helpers ----
+
+/** Formatea un monto con separadores regionales en español y 2 decimales. */
+function formatearMoneda(valor: number): string {
+  return valor.toLocaleString("es-MX", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
 // ---- Componente ----
 
 export function InventarioSection() {
@@ -46,6 +62,7 @@ export function InventarioSection() {
   const [estadoDialog, setEstadoDialog] = useState<EstadoDialog>({ tipo: null })
   const [productoSeleccionado, setProductoSeleccionado] = useState<ProductoDTO | null>(null)
   const [resumen, setResumen] = useState<ResumenInventario | null>(null)
+  const [valorInventario, setValorInventario] = useState<ValorInventario | null>(null)
 
   // Cargar tarjetas de resumen
   useEffect(() => {
@@ -53,6 +70,18 @@ export function InventarioSection() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data) setResumen(data)
+      })
+      .catch(() => {
+        // Silencioso: las tarjetas muestran "—" si falla
+      })
+  }, [refreshKey])
+
+  // Cargar métricas de Valor de Inventario (Req 2.1, 2.9)
+  useEffect(() => {
+    fetch("/api/inventario/valor")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setValorInventario(data)
       })
       .catch(() => {
         // Silencioso: las tarjetas muestran "—" si falla
@@ -139,6 +168,30 @@ export function InventarioSection() {
             {resumen ? resumen.critico.toLocaleString("es-MX") : "—"}
           </p>
         </div>
+      </div>
+
+      {/* Tarjetas de Valor de Inventario (Req 2.1, 2.9) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <StatCard
+          title="Inversión"
+          value={
+            valorInventario !== null
+              ? `$${formatearMoneda(valorInventario.inversion)}`
+              : "—"
+          }
+          icon={ShoppingCart}
+          iconBg="bg-blue-500/10"
+        />
+        <StatCard
+          title="Recaudación potencial"
+          value={
+            valorInventario !== null
+              ? `$${formatearMoneda(valorInventario.recaudacion_potencial)}`
+              : "—"
+          }
+          icon={TrendingUp}
+          iconBg="bg-green-500/10"
+        />
       </div>
 
       {/* Tabla principal */}

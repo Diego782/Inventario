@@ -5,6 +5,7 @@ import { ok, errorValidacion } from "@/lib/api/respuestas"
 import { mapPrismaError } from "@/lib/api/errores"
 import { listarNotifQuerySchema } from "@/lib/schemas/notificaciones"
 import { resolverContexto } from "@/lib/auth/contexto-request"
+import { generarNotificacionesVencimiento } from "@/lib/dominio/notificaciones"
 
 // Máximo de notificaciones devueltas por solicitud (R8.1).
 const LIMITE_NOTIFICACIONES = 100
@@ -15,13 +16,17 @@ const LIMITE_NOTIFICACIONES = 100
  * `listarNotifQuerySchema`. En fallo responde 422 `{ errores:[{campo,mensaje}] }`
  * sin consultar la base de datos (R8.2, R8.10).
  *
+ * Antes de devolver el listado, llama a `generarNotificacionesVencimiento`
+ * de forma perezosa para crear notificaciones de vencimiento de deuda
+ * si corresponde (Req 8.7). Esto evita necesitar un cron job.
+ *
  * En éxito devuelve hasta 100 `NotificacionDTO` ordenadas de forma descendente
  * por `creado_en`, con desempate descendente por `id` (R8.1). Cuando
  * `solo_no_leidas === "true"` limita el resultado a `leida = false` (R8.3).
  * Devuelve lista vacía cuando no hay coincidencias (R8.4) y siempre responde
  * con `Content-Type: application/json; charset=utf-8` (R8.11).
  *
- * Las notificaciones están aisladas por organización activa.
+ * Las notificaciones están aisladas por organización activa (Req 8.10).
  */
 export async function GET(req: NextRequest) {
   const resultado = await resolverContexto("requiere-organizacion")
@@ -41,6 +46,15 @@ export async function GET(req: NextRequest) {
   const orgId = resultado.ctx.organizacionActiva!.id
 
   try {
+    // Evaluación perezosa: genera notificaciones de vencimiento de deuda
+    // antes de consultar el listado (Req 8.7). Si falla, se ignora silenciosamente
+    // para no degradar el listado por un error en la generación.
+    try {
+      await generarNotificacionesVencimiento(orgId)
+    } catch {
+      // No propagar: el listado sigue siendo válido aunque falle la generación.
+    }
+
     const notificaciones = await prisma.notificacion.findMany({
       where: {
         organizacion_id: orgId,

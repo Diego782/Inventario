@@ -37,6 +37,20 @@ const TZ = "America/Mexico_City"
 // ---------------------------------------------------------------------------
 let SIMULAR_TIMEOUT = false
 
+vi.mock("@/lib/auth/contexto-request", () => ({
+  resolverContexto: vi.fn().mockImplementation(() => {
+    return Promise.resolve({
+      ctx: {
+        usuarioActual: { id: "usr-001", correo: "test@test.com", nombre: "Test" },
+        organizacionActiva: { id: "00000000-0000-4000-8000-000000000001", nombre: "Org Test", slug: "org-test" },
+        rol: "propietario",
+        permisos: [{ seccion: "dashboard", accion: "ver" }],
+        sesionId: "ses-001",
+      },
+    })
+  }),
+}))
+
 vi.mock("@/lib/dominio/metricas", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/dominio/metricas")>()
   return {
@@ -274,7 +288,7 @@ describe.skipIf(SKIP_DB || !TIENE_BD)(
 
     it("calcularMetricas completa sin error con el dataset sembrado", async () => {
       const { calcularMetricas } = await import("@/lib/dominio/metricas")
-      const dto = await calcularMetricas(DESDE, HASTA, TZ)
+      const dto = await calcularMetricas(DESDE, HASTA, TZ, ORG_DEFAULT)
       expect(dto.totalSales.actual).toBeGreaterThanOrEqual(0)
       expect(dto.estimatedProfit.actual).toBeCloseTo(
         dto.totalSales.actual - dto.totalExpenses.actual,
@@ -284,7 +298,7 @@ describe.skipIf(SKIP_DB || !TIENE_BD)(
 
     it("calcularRankings completa sin error con el dataset sembrado", async () => {
       const { calcularRankings } = await import("@/lib/dominio/rankings")
-      const dto = await calcularRankings(DESDE, HASTA, 5, TZ)
+      const dto = await calcularRankings(DESDE, HASTA, 5, ORG_DEFAULT, TZ)
       expect(dto.topSelling).toBeInstanceOf(Array)
       expect(dto.topMargin).toBeInstanceOf(Array)
       expect(dto.topRotation).toBeInstanceOf(Array)

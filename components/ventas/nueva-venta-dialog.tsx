@@ -1,5 +1,14 @@
 "use client"
 
+/**
+ * components/ventas/nueva-venta-dialog.tsx
+ * Dialog principal de creación de ventas.
+ * Gestiona el estado del carrito, los descuentos por producto y el descuento total.
+ * Pasa el total calculado (con descuentos) a PagoForm.
+ *
+ * Req 6.1–6.10, 7.1–7.8
+ */
+
 import { useRef, useState, useCallback } from "react"
 import { toast } from "sonner"
 import {
@@ -18,8 +27,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { CarritoTable } from "@/components/ventas/carrito-table"
-import { PagoForm } from "@/components/ventas/pago-form"
+import {
+  CarritoTable,
+  calcularTotalesConDescuentos,
+  type DescuentosProducto,
+} from "@/components/ventas/carrito-table"
+import { PagoForm, type PagoPayload } from "@/components/ventas/pago-form"
 import { AgregarProductoVenta } from "@/components/ventas/agregar-producto-venta"
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner"
 import { useCarritoVenta } from "@/hooks/use-carrito-venta"
@@ -42,6 +55,10 @@ export function NuevaVentaDialog({
   const [confirmarCierre, setConfirmarCierre] = useState(false)
   const { data: config } = useConfiguracion()
 
+  // Estado de descuentos
+  const [descuentosProducto, setDescuentosProducto] = useState<DescuentosProducto>({})
+  const [descuentoTotal, setDescuentoTotal] = useState<number>(0)
+
   const carrito = useCarritoVenta(
     config.porcentaje_impuesto,
     config.permitir_sobreventa
@@ -53,11 +70,10 @@ export function NuevaVentaDialog({
     })
   }, [])
 
-  // Solo refocusear al campo oculto cuando el click fue en el fondo del dialog,
-  // nunca cuando el usuario hizo click en un input, button, label, select, etc.
+  // Solo refocusear al campo oculto cuando el click fue en el fondo del dialog
   const handleDialogClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement
-    const interactivo = target.closest("input, textarea, select, button, label, [role='radio'], [role='checkbox']")
+    const interactivo = target.closest("input, textarea, select, button, label, [role='radio'], [role='checkbox'], [role='combobox'], [role='option']")
     if (!interactivo) {
       refocusHidden()
     }
@@ -78,7 +94,6 @@ export function NuevaVentaDialog({
       }
       const producto: ProductoDTO = await res.json()
 
-      // Si el producto maneja tallas, no podemos asumir cuál; pedir selección
       if ((producto.variantes?.length ?? 0) > 0) {
         toast.info(`${producto.nombre} tiene tallas. Selecciona la talla abajo.`)
         refocusHidden()
@@ -101,16 +116,35 @@ export function NuevaVentaDialog({
     onScan: handleScan,
   })
 
-  // Manejar cobro
-  async function handleCobrar(payload: {
-    metodo_pago: "efectivo" | "tarjeta" | "transferencia" | "fiado"
-    monto_recibido?: number
-    fiador_id?: string
-  }) {
+  // Calcular totales con descuentos para pasar el total correcto a PagoForm
+  const totalesConDescuentos = calcularTotalesConDescuentos(
+    carrito.items,
+    descuentosProducto,
+    descuentoTotal,
+    config.porcentaje_impuesto
+  )
+
+  // Manejar cobro — envía cliente_id y plazo_deuda si aplica
+  async function handleCobrar(payload: PagoPayload) {
     try {
+      // Serializar ítems con descuentos por producto
+      const itemsConDescuento = carrito.serializarParaApi().map((item) => {
+        const clave = item.variante_id
+          ? `${item.producto_id}::${item.variante_id}`
+          : item.producto_id
+        return {
+          ...item,
+          descuento_producto: descuentosProducto[clave] ?? 0,
+        }
+      })
+
       const body = {
-        ...payload,
-        items: carrito.serializarParaApi(),
+        metodo_pago: payload.metodo_pago,
+        monto_recibido: payload.monto_recibido,
+        cliente_id: payload.cliente_id,
+        plazo_deuda: payload.plazo_deuda,
+        descuento_total: descuentoTotal > 0 ? descuentoTotal : undefined,
+        items: itemsConDescuento,
       }
 
       const res = await fetch("/api/ventas", {
@@ -129,6 +163,8 @@ export function NuevaVentaDialog({
 
       toast.success(`Venta registrada: ${data.folio}`)
       carrito.limpiar()
+      setDescuentosProducto({})
+      setDescuentoTotal(0)
       onVentaCreada(data)
     } catch {
       toast.error(toastDeError("RED"))
@@ -148,6 +184,8 @@ export function NuevaVentaDialog({
 
   function handleConfirmarCierre() {
     carrito.limpiar()
+    setDescuentosProducto({})
+    setDescuentoTotal(0)
     setConfirmarCierre(false)
     onClose()
   }
@@ -156,7 +194,7 @@ export function NuevaVentaDialog({
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
-          className="sm:max-w-[960px] w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto"
+          className="sm:max-w-[1040px] w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto"
           onClick={handleDialogClick}
         >
           <DialogHeader>
@@ -193,24 +231,44 @@ export function NuevaVentaDialog({
               />
               <CarritoTable
                 items={carrito.items}
-                totales={carrito.totales}
+                porcentajeImpuesto={config.porcentaje_impuesto}
+                descuentosProducto={descuentosProducto}
+                descuentoTotal={descuentoTotal}
                 onCambiarCantidad={(clave, cantidad) => {
                   carrito.setCantidad(clave, cantidad)
                   refocusHidden()
                 }}
                 onEliminar={(clave) => {
                   carrito.eliminar(clave)
+                  // Al eliminar un ítem, quitar su descuento también
+                  setDescuentosProducto((prev) => {
+                    const next = { ...prev }
+                    delete next[clave]
+                    return next
+                  })
                   refocusHidden()
+                }}
+                onDescuentoProductoChange={(clave, descuento) => {
+                  setDescuentosProducto((prev) => ({
+                    ...prev,
+                    [clave]: descuento,
+                  }))
+                }}
+                onDescuentoTotalChange={(descuento) => {
+                  setDescuentoTotal(descuento)
+                }}
+                onTotalesChange={() => {
+                  // Los totales se recalculan en render; no se necesita estado adicional
                 }}
               />
             </div>
 
-            {/* Pago — ancho fijo de 280px para que siempre quepa */}
-            <div className="w-full lg:w-[280px] shrink-0">
+            {/* Pago — ancho fijo de 300px */}
+            <div className="w-full lg:w-[300px] shrink-0">
               <PagoForm
-                total={carrito.totales.total}
+                total={totalesConDescuentos.total}
                 onCobrar={handleCobrar}
-                disabled={carrito.items.length === 0}
+                disabled={carrito.items.length === 0 || !!totalesConDescuentos.errorDescuento}
               />
             </div>
           </div>

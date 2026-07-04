@@ -5,7 +5,8 @@
  * Panel de filtros avanzados del catálogo de productos.
  * Se monta en un Popover desde el botón "Filtrar" de InventarioSection.
  * Permite filtrar por nombre, unidad, categoría, talla y rangos de
- * precio de venta, precio de compra, stock mínimo y stock inicial (actual).
+ * precio de venta, precio de compra, stock mínimo y stock actual, además de
+ * un toggle "Solo stock crítico" (Req 10.1, 10.2).
  */
 
 import { useEffect, useState } from "react"
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import {
   Popover,
   PopoverContent,
@@ -40,8 +42,12 @@ export type FiltrosInventario = {
   precio_compra_max?: number
   stock_minimo_min?: number
   stock_minimo_max?: number
-  stock_actual_min?: number
-  stock_actual_max?: number
+  /** Límite mínimo del rango de stock actual (Req 10.4) */
+  stock_min?: number
+  /** Límite máximo del rango de stock actual (Req 10.5) */
+  stock_max?: number
+  /** Mostrar solo productos en estado Crítico (Req 10.1) */
+  solo_critico?: boolean
 }
 
 interface FiltrosInventarioProps {
@@ -64,7 +70,7 @@ function aNumero(valor: string): number | undefined {
 
 /** Cuenta cuántos filtros están activos (para el badge del botón). */
 export function contarFiltros(f: FiltrosInventario): number {
-  return Object.values(f).filter((v) => v !== undefined && v !== "").length
+  return Object.values(f).filter((v) => v !== undefined && v !== "" && v !== false).length
 }
 
 // ---- Componente ----
@@ -108,7 +114,7 @@ export function FiltrosInventario({ filtros, onAplicar }: FiltrosInventarioProps
   function setCampo<K extends keyof FiltrosInventario>(campo: K, valor: FiltrosInventario[K]) {
     setBorrador((prev) => {
       const next = { ...prev }
-      if (valor === undefined || valor === "") {
+      if (valor === undefined || valor === "" || valor === false) {
         delete next[campo]
       } else {
         next[campo] = valor
@@ -117,17 +123,29 @@ export function FiltrosInventario({ filtros, onAplicar }: FiltrosInventarioProps
     })
   }
 
-  /** Valida que los mínimos no superen a los máximos. */
+  /** Valida que los mínimos no superen a los máximos (Req 10.6, 10.7). */
   function validar(f: FiltrosInventario): string | null {
     const pares: Array<[number | undefined, number | undefined, string]> = [
       [f.precio_venta_min, f.precio_venta_max, "precio de venta"],
       [f.precio_compra_min, f.precio_compra_max, "precio de compra"],
       [f.stock_minimo_min, f.stock_minimo_max, "stock mínimo"],
-      [f.stock_actual_min, f.stock_actual_max, "stock inicial"],
+      [f.stock_min, f.stock_max, "stock"],
     ]
     for (const [min, max, etiqueta] of pares) {
       if (min !== undefined && min < 0) return `El ${etiqueta} no puede ser negativo.`
       if (max !== undefined && max < 0) return `El ${etiqueta} no puede ser negativo.`
+      if (
+        min !== undefined &&
+        !Number.isInteger(min) &&
+        ["stock", "stock mínimo"].includes(etiqueta)
+      )
+        return `El ${etiqueta} debe ser un número entero.`
+      if (
+        max !== undefined &&
+        !Number.isInteger(max) &&
+        ["stock", "stock mínimo"].includes(etiqueta)
+      )
+        return `El ${etiqueta} debe ser un número entero.`
       if (min !== undefined && max !== undefined && min > max) {
         return `En ${etiqueta}, el mínimo no puede ser mayor que el máximo.`
       }
@@ -187,6 +205,20 @@ export function FiltrosInventario({ filtros, onAplicar }: FiltrosInventarioProps
 
           <Separator />
 
+          {/* Solo stock crítico (Req 10.1) */}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="f-solo-critico" className="text-xs cursor-pointer">
+              Solo stock crítico
+            </Label>
+            <Switch
+              id="f-solo-critico"
+              checked={!!borrador.solo_critico}
+              onCheckedChange={(checked) => setCampo("solo_critico", checked || undefined)}
+            />
+          </div>
+
+          <Separator />
+
           {/* Texto */}
           <div className="grid grid-cols-1 gap-3">
             <div className="space-y-1.5">
@@ -206,7 +238,9 @@ export function FiltrosInventario({ filtros, onAplicar }: FiltrosInventarioProps
               <Label className="text-xs">Categoría</Label>
               <Select
                 value={borrador.categoria_id ?? SIN_VALOR}
-                onValueChange={(v) => setCampo("categoria_id", v === SIN_VALOR ? undefined : v)}
+                onValueChange={(v) =>
+                  setCampo("categoria_id", v === SIN_VALOR ? undefined : v)
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todas" />
@@ -225,7 +259,9 @@ export function FiltrosInventario({ filtros, onAplicar }: FiltrosInventarioProps
               <Label className="text-xs">Unidad</Label>
               <Select
                 value={borrador.unidad ?? SIN_VALOR}
-                onValueChange={(v) => setCampo("unidad", v === SIN_VALOR ? undefined : v)}
+                onValueChange={(v) =>
+                  setCampo("unidad", v === SIN_VALOR ? undefined : v)
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todas" />
@@ -246,7 +282,9 @@ export function FiltrosInventario({ filtros, onAplicar }: FiltrosInventarioProps
             <Label className="text-xs">Talla</Label>
             <Select
               value={borrador.talla ?? SIN_VALOR}
-              onValueChange={(v) => setCampo("talla", v === SIN_VALOR ? undefined : v)}
+              onValueChange={(v) =>
+                setCampo("talla", v === SIN_VALOR ? undefined : v)
+              }
             >
               <SelectTrigger>
                 <SelectValue placeholder="Todas" />
@@ -289,19 +327,25 @@ export function FiltrosInventario({ filtros, onAplicar }: FiltrosInventarioProps
             onMin={(v) => setCampo("stock_minimo_min", v)}
             onMax={(v) => setCampo("stock_minimo_max", v)}
           />
+          {/* Rango "Stock" — reemplaza el antiguo "Stock inicial" (Req 10.2) */}
           <RangoNumerico
-            etiqueta="Stock inicial"
-            min={borrador.stock_actual_min}
-            max={borrador.stock_actual_max}
+            etiqueta="Stock"
+            min={borrador.stock_min}
+            max={borrador.stock_max}
             step="1"
-            onMin={(v) => setCampo("stock_actual_min", v)}
-            onMax={(v) => setCampo("stock_actual_max", v)}
+            onMin={(v) => setCampo("stock_min", v)}
+            onMax={(v) => setCampo("stock_max", v)}
           />
 
           {error && <p className="text-xs text-destructive">{error}</p>}
 
           <div className="flex gap-2 pt-1">
-            <Button variant="outline" size="sm" className="flex-1" onClick={() => setAbierto(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => setAbierto(false)}
+            >
               Cancelar
             </Button>
             <Button size="sm" className="flex-1" onClick={aplicar}>

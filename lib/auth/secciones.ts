@@ -1,7 +1,7 @@
 // lib/auth/secciones.ts
 export const SECCIONES = [
   "dashboard", "inventario", "ventas", "fiadores",
-  "horarios", "configuracion", "usuarios",
+  "horarios", "configuracion", "usuarios", "clientes",
 ] as const
 export type Seccion = (typeof SECCIONES)[number]
 
@@ -13,5 +13,5 @@ export type Accion = (typeof ACCIONES)[number]
 export const LABEL_A_SECCION: Record<string, Seccion> = {
   Dashboard: "dashboard", Inventario: "inventario", Ventas: "ventas",
   Fiadores: "fiadores", Empleados: "usuarios", Horarios: "horarios",
-  Configuracion: "configuracion",
+  Configuracion: "configuracion", Clientes: "clientes",
 }

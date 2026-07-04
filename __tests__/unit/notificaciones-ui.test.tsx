@@ -55,8 +55,11 @@ function crearNotif(over: Partial<NotificacionDTO> = {}): NotificacionDTO {
     titulo: over.titulo ?? "Stock crítico detectado",
     mensaje: over.mensaje ?? "El producto Arroz tiene stock crítico: 0 unidades (mínimo: 10).",
     producto_id: over.producto_id ?? "prod-1",
+    venta_id: over.venta_id ?? null,
     leida: over.leida ?? false,
     creado_en: over.creado_en ?? "2025-04-20T10:00:00.000Z",
+    // acciones_rapidas vacío por defecto para que los tests básicos no muestren botones de acción
+    acciones_rapidas: over.acciones_rapidas ?? [],
   }
 }
 

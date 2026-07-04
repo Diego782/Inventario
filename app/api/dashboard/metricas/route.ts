@@ -9,11 +9,14 @@
 // - R2.13: sin registros, las métricas valen 0 (lo resuelve la capa de dominio).
 // - R2.14: responde `Content-Type: application/json; charset=utf-8` (vía `ok`).
 // - R14.7: el cálculo está acotado a 5 s; al expirar responde `CONSULTA_TIMEOUT` (504).
+// - Req 1.4 (gestion-clientes-y-fiadores): si no hay organización activa,
+//   `resolverContexto` devuelve error de autorización antes de calcular métricas.
 import { NextRequest } from "next/server"
 import { calcularMetricas } from "@/lib/dominio/metricas"
 import { ok, errorValidacion } from "@/lib/api/respuestas"
 import { mapPrismaError, ConsultaTimeoutError } from "@/lib/api/errores"
 import { metricasQuerySchema } from "@/lib/schemas/dashboard"
+import { resolverContexto } from "@/lib/auth/contexto-request"
 
 const TIMEOUT_MS = 5_000
 const TZ = process.env.TZ ?? "America/Mexico_City"
@@ -32,6 +35,13 @@ function conLimiteTiempo<T>(promesa: Promise<T>): Promise<T> {
 }
 
 export async function GET(req: NextRequest) {
+  // Req 1.4: guard de organización activa — si falta, responde error de auth.
+  const resultado = await resolverContexto({ seccion: "dashboard", accion: "ver" })
+  if (resultado.error) return resultado.error
+
+  const { ctx } = resultado
+  const organizacion_id = ctx.organizacionActiva!.id
+
   const { searchParams } = req.nextUrl
   const raw = Object.fromEntries(searchParams.entries())
   const parsed = metricasQuerySchema.safeParse(raw)
@@ -45,7 +55,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const { desde, hasta } = parsed.data
-    const metricas = await conLimiteTiempo(calcularMetricas(desde, hasta, TZ))
+    const metricas = await conLimiteTiempo(calcularMetricas(desde, hasta, TZ, organizacion_id))
     return ok(metricas)
   } catch (e) {
     return mapPrismaError(e)

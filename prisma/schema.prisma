@@ -57,6 +57,11 @@ enum TipoHorario {
   descanso
 }
 
+enum TipoMovimientoDeuda {
+  cargo
+  abono
+}
+
 // ---------- Tablas ----------
 
 model Categoria {
@@ -136,6 +141,9 @@ model Venta {
   usuario_id      String?      @db.Char(36)
   estado          EstadoVenta  @default(completada)
   creado_en       DateTime     @default(now())
+  cliente_id      String?      @db.Char(36)
+  cliente         Cliente?     @relation(fields: [cliente_id], references: [id])
+  plazo_deuda     DateTime?
 
   items VentaItem[]
 
@@ -143,22 +151,23 @@ model Venta {
   @@index([creado_en])
   @@index([metodo_pago, creado_en])
   @@index([fiador_id])
+  @@index([cliente_id])
   @@map("ventas")
 }
 
 model VentaItem {
-  id              String       @id @default(uuid()) @db.Char(36)
-  organizacion_id String       @db.Char(36)
-  organizacion    Organizacion @relation(fields: [organizacion_id], references: [id])
-  venta_id        String       @db.Char(36)
-  venta           Venta        @relation(fields: [venta_id], references: [id], onDelete: Cascade)
-  producto_id     String       @db.Char(36)
-  producto        Producto     @relation(fields: [producto_id], references: [id])
+  id              String            @id @default(uuid()) @db.Char(36)
+  organizacion_id String            @db.Char(36)
+  organizacion    Organizacion      @relation(fields: [organizacion_id], references: [id])
+  venta_id        String            @db.Char(36)
+  venta           Venta             @relation(fields: [venta_id], references: [id], onDelete: Cascade)
+  producto_id     String            @db.Char(36)
+  producto        Producto          @relation(fields: [producto_id], references: [id])
   variante_id     String?           @db.Char(36)
   variante        VarianteProducto? @relation(fields: [variante_id], references: [id], onDelete: SetNull)
   cantidad        Int
-  precio_unitario Decimal      @db.Decimal(12, 2)
-  subtotal_linea  Decimal      @db.Decimal(12, 2)
+  precio_unitario Decimal           @db.Decimal(12, 2)
+  subtotal_linea  Decimal           @db.Decimal(12, 2)
 
   @@index([organizacion_id])
   @@index([venta_id])
@@ -194,17 +203,17 @@ model VarianteProducto {
 }
 
 model Notificacion {
-  id                  String    @id @default(uuid()) @db.Char(36)
-  organizacion_id     String    @db.Char(36)
+  id                  String       @id @default(uuid()) @db.Char(36)
+  organizacion_id     String       @db.Char(36)
   organizacion        Organizacion @relation(fields: [organizacion_id], references: [id])
-  tipo                String    @db.VarChar(40)
-  titulo              String    @db.VarChar(160)
-  mensaje             String    @db.VarChar(400)
-  producto_id         String?   @db.Char(36)
-  producto            Producto? @relation(fields: [producto_id], references: [id], onDelete: SetNull)
-  leida               Boolean   @default(false)
-  clave_deduplicacion String?   @unique @db.VarChar(120)
-  creado_en           DateTime  @default(now())
+  tipo                String       @db.VarChar(40)
+  titulo              String       @db.VarChar(160)
+  mensaje             String       @db.VarChar(400)
+  producto_id         String?      @db.Char(36)
+  producto            Producto?    @relation(fields: [producto_id], references: [id], onDelete: SetNull)
+  leida               Boolean      @default(false)
+  clave_deduplicacion String?      @unique @db.VarChar(120)
+  creado_en           DateTime     @default(now())
 
   @@index([organizacion_id])
   @@index([leida])
@@ -283,6 +292,8 @@ model Organizacion {
   venta_items       VentaItem[]
   configuraciones   Configuracion[]
   notificaciones    Notificacion[]
+  clientes          Cliente[]
+  movimientos_deuda MovimientoDeuda[]
 
   @@index([creado_por])
   @@map("organizaciones")
@@ -367,4 +378,45 @@ model HorarioMiembro {
 
   @@index([membresia_id])
   @@map("horarios_miembro")
+}
+
+// ---------- Clientes y Deuda ----------
+
+model Cliente {
+  id              String       @id @default(uuid()) @db.Char(36)
+  organizacion_id String       @db.Char(36)
+  organizacion    Organizacion @relation(fields: [organizacion_id], references: [id])
+  cedula          String       @db.VarChar(20)
+  nombre          String       @db.VarChar(100)
+  telefono        String       @db.VarChar(15)
+  correo          String?      @db.VarChar(254)
+  direccion       String?      @db.VarChar(240)
+  creado_en       DateTime     @default(now())
+  actualizado_en  DateTime     @updatedAt
+
+  ventas            Venta[]
+  movimientos_deuda MovimientoDeuda[]
+
+  @@unique([organizacion_id, cedula])
+  @@index([organizacion_id])
+  @@map("clientes")
+}
+
+model MovimientoDeuda {
+  id              String              @id @default(uuid()) @db.Char(36)
+  organizacion_id String              @db.Char(36)
+  organizacion    Organizacion        @relation(fields: [organizacion_id], references: [id])
+  cliente_id      String              @db.Char(36)
+  cliente         Cliente             @relation(fields: [cliente_id], references: [id])
+  tipo            TipoMovimientoDeuda
+  monto           Decimal             @db.Decimal(12, 2)
+  venta_id        String?             @db.Char(36)
+  plazo_deuda     DateTime?
+  fecha           DateTime            @default(now())
+  creado_en       DateTime            @default(now())
+
+  @@index([organizacion_id])
+  @@index([cliente_id, fecha])
+  @@index([venta_id])
+  @@map("movimientos_deuda")
 }

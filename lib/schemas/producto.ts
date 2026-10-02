@@ -3,6 +3,9 @@ import { z } from "zod"
 export const varianteStockSchema = z.object({
   talla: z.string().min(1).max(20),
   stock: z.number().int().nonnegative("El stock no puede ser negativo").default(0),
+  stock_minimo: z.number().int().nonnegative("El stock mínimo no puede ser negativo").optional(),
+  precio_compra: z.number().finite().nonnegative("El precio de compra no puede ser negativo").nullable().optional(),
+  precio_venta: z.number().finite().nonnegative("El precio no puede ser negativo").nullable().optional(),
 })
 
 /** Límite máximo para los filtros de rango de stock (Req 10.2, 10.7). */
@@ -74,12 +77,13 @@ export const listadoProductosSchema = z
 
 export type ListarProductosInput = z.infer<typeof listadoProductosSchema>
 
-export const crearProductoSchema = z.object({
+const productoBaseSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido").max(160),
   codigo_barras: z.string().max(48).optional().nullable(),
   categoria_id: z.string().uuid("ID de categoría inválido").optional().nullable(),
   precio_compra: z.number().nonnegative("El precio de compra no puede ser negativo").default(0),
   precio_venta: z.number().nonnegative("El precio de venta no puede ser negativo"),
+  precio_por_variante: z.boolean().optional(),
   // stock_actual se ignora cuando variantes_stock tiene entradas; se usa solo para productos sin tallas
   stock_actual: z.number().int().nonnegative("El stock no puede ser negativo").default(0),
   stock_minimo: z.number().int().nonnegative("El stock mínimo no puede ser negativo").default(0),
@@ -89,9 +93,35 @@ export const crearProductoSchema = z.object({
   variantes_stock: z.array(varianteStockSchema).optional().nullable(),
 })
 
-export const editarProductoSchema = crearProductoSchema
+export const crearProductoSchema = productoBaseSchema.superRefine((valor, ctx) => {
+  if (!valor.precio_por_variante) return
+  if (!valor.variantes_stock?.length) {
+    ctx.addIssue({ code: "custom", path: ["variantes_stock"], message: "Selecciona al menos una variante." })
+  }
+  valor.variantes_stock?.forEach((variante, index) => {
+    if (variante.precio_compra === null || variante.precio_compra === undefined) {
+      ctx.addIssue({ code: "custom", path: ["variantes_stock", index, "precio_compra"], message: "Indica el precio de compra de esta variante." })
+    }
+    if (variante.precio_venta === null || variante.precio_venta === undefined) {
+      ctx.addIssue({ code: "custom", path: ["variantes_stock", index, "precio_venta"], message: "Indica el precio de venta de esta variante." })
+    }
+  })
+})
+
+export const editarProductoSchema = productoBaseSchema
   .omit({ stock_actual: true, variantes_stock: true })
   .partial()
+  .extend({
+  precios_variantes: z.array(z.object({
+    variante_id: z.string().uuid(),
+    precio_compra: z.number().finite().nonnegative("El precio de compra no puede ser negativo").optional(),
+    precio_venta: z.number().finite().nonnegative("El precio no puede ser negativo"),
+  })).optional(),
+  minimos_variantes: z.array(z.object({
+    variante_id: z.string().uuid(),
+    stock_minimo: z.number().int().nonnegative("El stock mínimo no puede ser negativo"),
+  })).optional(),
+})
 
 export const ajusteStockSchema = z.object({
   tipo: z.enum(["entrada", "salida", "merma", "devolucion", "ajuste"], {

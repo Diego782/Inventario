@@ -94,6 +94,27 @@ export class TallaInvalidaError extends Error {
   }
 }
 
+export class PrecioVarianteInvalidoError extends Error {
+  constructor() {
+    super("PRECIO_VARIANTE_INVALIDO")
+    this.name = "PrecioVarianteInvalidoError"
+  }
+}
+
+export class StockMinimoVarianteInvalidoError extends Error {
+  constructor() {
+    super("STOCK_MINIMO_VARIANTE_INVALIDO")
+    this.name = "StockMinimoVarianteInvalidoError"
+  }
+}
+
+export class PrecioDesactualizadoError extends Error {
+  constructor() {
+    super("PRECIO_DESACTUALIZADO")
+    this.name = "PrecioDesactualizadoError"
+  }
+}
+
 export class CedulaDuplicadaError extends Error {
   constructor() {
     super("CEDULA_DUPLICADA")
@@ -158,6 +179,9 @@ export function mapPrismaError(e: unknown): Response {
   if (e instanceof ConsultaTimeoutError) return errorServidor("CONSULTA_TIMEOUT", 504)
   if (e instanceof NotificacionNoEncontradaError) return errorNoEncontrado("NOTIFICACION_NO_ENCONTRADA")
   if (e instanceof TallaInvalidaError) return errorPeticion("TALLA_INVALIDA")
+  if (e instanceof PrecioVarianteInvalidoError) return errorPeticion("PRECIO_VARIANTE_INVALIDO")
+  if (e instanceof StockMinimoVarianteInvalidoError) return errorPeticion("STOCK_MINIMO_VARIANTE_INVALIDO")
+  if (e instanceof PrecioDesactualizadoError) return errorConflicto("PRECIO_DESACTUALIZADO")
   if (e instanceof DescuentoInvalidoError) return errorPeticion("DESCUENTO_INVALIDO")
   if (e instanceof CedulaDuplicadaError) return errorConflicto("CEDULA_DUPLICADA")
   if (e instanceof ClienteNoEncontradoError) return errorNoEncontrado("CLIENTE_NO_ENCONTRADO")

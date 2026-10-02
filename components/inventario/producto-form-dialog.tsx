@@ -29,18 +29,21 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { crearProductoSchema, editarProductoSchema } from "@/lib/schemas/producto"
 import type { ProductoDTO } from "@/lib/api/serializadores"
 import { toastDeError } from "@/lib/mensajes-error"
 import { GestionarCategoriasDialog } from "@/components/inventario/gestionar-categorias-dialog"
 import { GestionarUnidadesDialog } from "@/components/inventario/gestionar-unidades-dialog"
 import { GestionarTallasDialog } from "@/components/inventario/gestionar-tallas-dialog"
-import { Plus, X } from "lucide-react"
+import { CircleHelp, Plus, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { z } from "zod"
 
 type CrearInput = z.infer<typeof crearProductoSchema>
 type EditarInput = z.infer<typeof editarProductoSchema>
+type FormInput = CrearInput & Pick<EditarInput, "precios_variantes" | "minimos_variantes">
 
 interface ProductoFormDialogProps {
   open: boolean
@@ -70,7 +73,7 @@ export function ProductoFormDialog({
   const [tallasSeleccionadas, setTallasSeleccionadas] = useState<string[]>([])
 
   const schema = modo === "crear" ? crearProductoSchema : editarProductoSchema
-  const form = useForm<CrearInput>({
+  const form = useForm<FormInput>({
     resolver: zodResolver(schema as any),
     defaultValues: {
       nombre: "",
@@ -78,13 +81,17 @@ export function ProductoFormDialog({
       categoria_id: undefined,
       precio_compra: 0,
       precio_venta: 0,
+      precio_por_variante: false,
       stock_actual: 0,
       stock_minimo: 0,
       unidad: "unidad",
       talla: null,
       variantes_stock: [],
+      precios_variantes: [],
+      minimos_variantes: [],
     },
   })
+  const { reset } = form
 
   // useFieldArray para manejar el stock por talla dinámicamente
   const { fields: variantesFields, replace: replaceVariantes } = useFieldArray({
@@ -98,12 +105,14 @@ export function ProductoFormDialog({
     const nuevasVariantes = tallasSeleccionadas.map((t) => {
       // Preservar el stock ya ingresado si la talla estaba antes
       const existente = form.getValues("variantes_stock")?.find((v: any) => v.talla === t)
-      return { talla: t, stock: existente?.stock ?? 0 }
+      return { talla: t, stock: existente?.stock ?? 0, stock_minimo: existente?.stock_minimo ?? 0, precio_compra: existente?.precio_compra ?? null, precio_venta: existente?.precio_venta ?? null }
     })
     replaceVariantes(nuevasVariantes as any)
     // Si hay tallas seleccionadas, limpiar el campo talla simple
     if (tallasSeleccionadas.length > 0) {
       form.setValue("talla", null)
+    } else {
+      form.setValue("precio_por_variante", false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tallasSeleccionadas, modo])
@@ -111,32 +120,45 @@ export function ProductoFormDialog({
   // Precargar valores en modo editar
   useEffect(() => {
     if (modo === "editar" && producto) {
-      form.reset({
+      reset({
         nombre: producto.nombre,
         codigo_barras: producto.codigo_barras ?? "",
         categoria_id: producto.categoria_id ?? undefined,
         precio_compra: producto.precio_compra,
         precio_venta: producto.precio_venta,
+        precio_por_variante: producto.precio_por_variante ?? false,
+        precios_variantes: producto.variantes.map((v) => ({
+          variante_id: v.id,
+          precio_compra: v.precio_compra ?? producto.precio_compra,
+          precio_venta: v.precio_venta ?? producto.precio_venta,
+        })),
+        minimos_variantes: producto.variantes.map((v) => ({
+          variante_id: v.id,
+          stock_minimo: v.stock_minimo,
+        })),
         stock_minimo: producto.stock_minimo,
         unidad: producto.unidad,
         talla: producto.talla ?? null,
       })
     } else if (modo === "crear") {
       setTallasSeleccionadas([])
-      form.reset({
+      reset({
         nombre: "",
         codigo_barras: "",
         categoria_id: undefined,
         precio_compra: 0,
         precio_venta: 0,
+        precio_por_variante: false,
         stock_actual: 0,
         stock_minimo: 0,
         unidad: "unidad",
         talla: null,
         variantes_stock: [],
+        precios_variantes: [],
+        minimos_variantes: [],
       })
     }
-  }, [modo, producto, form, open])
+  }, [modo, producto, reset, open])
 
   // Cargar categorías
   function cargarCategorias() {
@@ -176,7 +198,7 @@ export function ProductoFormDialog({
     )
   }
 
-  async function onSubmit(values: CrearInput) {
+  async function onSubmit(values: FormInput) {
     setGuardando(true)
     try {
       const url = modo === "crear" ? "/api/productos" : `/api/productos/${producto?.id}`
@@ -184,6 +206,14 @@ export function ProductoFormDialog({
 
       // Si no hay variantes seleccionadas, no enviar el campo
       const payload = { ...values }
+      if (modo === "crear" && payload.precio_por_variante) {
+        payload.precio_compra = Math.min(...(payload.variantes_stock ?? []).map((v) => v.precio_compra ?? Infinity))
+        payload.precio_venta = Math.min(...(payload.variantes_stock ?? []).map((v) => v.precio_venta ?? Infinity))
+      }
+      if (modo === "crear") delete payload.precios_variantes
+      if (modo === "crear") delete payload.minimos_variantes
+      if (modo === "editar") delete payload.variantes_stock
+      if (!payload.precio_por_variante) delete payload.precios_variantes
       if (!payload.variantes_stock || payload.variantes_stock.length === 0) {
         delete (payload as any).variantes_stock
       }
@@ -218,11 +248,43 @@ export function ProductoFormDialog({
   }
 
   const usandoVariantes = modo === "crear" && tallasSeleccionadas.length > 0
+  const tieneVariantes = usandoVariantes || (modo === "editar" && (producto?.variantes.length ?? 0) > 0)
+  const precioPorVariante = !!form.watch("precio_por_variante") && tieneVariantes
+
+  function cambiarModoPrecio(activado: boolean) {
+    const compraComun = form.getValues("precio_compra") ?? 0
+    const precioComun = form.getValues("precio_venta") ?? 0
+    if (activado) {
+      if (modo === "crear") {
+        form.getValues("variantes_stock")?.forEach((variante, index) => {
+          form.setValue(`variantes_stock.${index}.precio_compra`, variante.precio_compra ?? compraComun)
+          form.setValue(`variantes_stock.${index}.precio_venta`, variante.precio_venta ?? precioComun)
+        })
+      } else {
+        const preciosActuales = form.getValues("precios_variantes") ?? []
+        form.setValue("precios_variantes", producto?.variantes.map((variante) => ({
+          variante_id: variante.id,
+          precio_compra: preciosActuales.find((p) => p.variante_id === variante.id)?.precio_compra ?? variante.precio_compra ?? compraComun,
+          precio_venta: preciosActuales.find((p) => p.variante_id === variante.id)?.precio_venta ?? variante.precio_venta ?? precioComun,
+        })) ?? [])
+      }
+    } else {
+      const preciosCompra = modo === "crear"
+        ? form.getValues("variantes_stock")?.map((v) => v.precio_compra).filter((v): v is number => v != null)
+        : form.getValues("precios_variantes")?.map((v) => v.precio_compra).filter((v): v is number => v != null)
+      const preciosVenta = modo === "crear"
+        ? form.getValues("variantes_stock")?.map((v) => v.precio_venta).filter((v): v is number => v != null)
+        : form.getValues("precios_variantes")?.map((v) => v.precio_venta)
+      if (preciosCompra?.length) form.setValue("precio_compra", Math.min(...preciosCompra))
+      if (preciosVenta?.length) form.setValue("precio_venta", Math.min(...preciosVenta))
+    }
+    form.setValue("precio_por_variante", activado)
+  }
 
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             {modo === "crear" ? "Nuevo Producto" : "Editar Producto"}
@@ -346,7 +408,7 @@ export function ProductoFormDialog({
               {modo === "crear" ? (
                 <FormItem className="col-span-2">
                   <div className="flex items-center gap-1">
-                    <FormLabel>Tallas</FormLabel>
+                    <FormLabel>Variantes</FormLabel>
                     <Button
                       type="button"
                       size="icon"
@@ -359,13 +421,13 @@ export function ProductoFormDialog({
                   </div>
                   {tallas.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                      No hay tallas configuradas.{" "}
+                      No hay variantes configuradas.{" "}
                       <button
                         type="button"
                         className="underline"
                         onClick={() => setGestionarTallas(true)}
                       >
-                        Agregar tallas
+                        Agregar variantes
                       </button>
                     </p>
                   ) : (
@@ -392,18 +454,18 @@ export function ProductoFormDialog({
                   )}
                   {tallasSeleccionadas.length > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      {tallasSeleccionadas.length} talla{tallasSeleccionadas.length > 1 ? "s" : ""} seleccionada{tallasSeleccionadas.length > 1 ? "s" : ""}. Ingresa el stock inicial para cada una.
+                      {tallasSeleccionadas.length} variante{tallasSeleccionadas.length > 1 ? "s" : ""} seleccionada{tallasSeleccionadas.length > 1 ? "s" : ""}. Ingresa el stock inicial para cada una.
                     </p>
                   )}
                 </FormItem>
-              ) : (
+              ) : (producto?.variantes.length ?? 0) === 0 ? (
                 <FormField
                   control={form.control}
                   name="talla"
                   render={({ field }) => (
                     <FormItem>
                       <div className="flex items-center gap-1">
-                        <FormLabel>Talla</FormLabel>
+                        <FormLabel>Variante</FormLabel>
                         <Button
                           type="button"
                           size="icon"
@@ -420,11 +482,11 @@ export function ProductoFormDialog({
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Sin talla" />
+                            <SelectValue placeholder="Sin variante" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="__none__">Sin talla</SelectItem>
+                          <SelectItem value="__none__">Sin variante</SelectItem>
                           {tallas.map((t) => (
                             <SelectItem key={t} value={t}>
                               {t}
@@ -436,9 +498,33 @@ export function ProductoFormDialog({
                     </FormItem>
                   )}
                 />
+              ) : null}
+
+              {tieneVariantes && (
+                <div className="col-span-2 flex items-center gap-2 rounded-md border p-3">
+                  <Switch
+                    id="precio-por-variante"
+                    checked={precioPorVariante}
+                    onCheckedChange={cambiarModoPrecio}
+                    aria-label="Precios por variante"
+                  />
+                  <label htmlFor="precio-por-variante" className="text-sm font-medium cursor-pointer">
+                    Precios por variante
+                  </label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" aria-label="Ayuda sobre precios por variante" className="text-muted-foreground">
+                        <CircleHelp className="size-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-60">
+                      Actívalo para asignar precios de compra y venta a cada variante. Si está apagado, todas usan los precios del producto.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               )}
 
-              <FormField
+              {!precioPorVariante && <FormField
                 control={form.control}
                 name="precio_compra"
                 render={({ field }) => (
@@ -456,9 +542,9 @@ export function ProductoFormDialog({
                     <FormMessage />
                   </FormItem>
                 )}
-              />
+              />}
 
-              <FormField
+              {!precioPorVariante && <FormField
                 control={form.control}
                 name="precio_venta"
                 render={({ field }) => (
@@ -476,82 +562,120 @@ export function ProductoFormDialog({
                     <FormMessage />
                   </FormItem>
                 )}
-              />
+              />}
 
-              {/* Stock Inicial — simple si no hay tallas, por talla si las hay */}
-              {modo === "crear" && (
-                usandoVariantes ? (
-                  <div className="col-span-2 space-y-3">
-                    <FormLabel>Stock Inicial por Talla</FormLabel>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {variantesFields.map((variante, index) => (
-                        <FormField
-                          key={variante.id}
-                          control={form.control}
-                          name={`variantes_stock.${index}.stock` as any}
+              {tieneVariantes && (
+                <section className="col-span-2 space-y-3" aria-label="Detalles por variante">
+                  <div>
+                    <h3 className="text-sm font-semibold">Detalles por variante</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {precioPorVariante
+                        ? "Configura compra, venta y stock de cada variante."
+                        : "Configura el stock de cada variante."}
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {modo === "crear" ? variantesFields.map((variante, index) => (
+                      <div key={variante.id} className="space-y-3 rounded-xl border bg-muted/20 p-4">
+                        <Badge variant="secondary">{form.getValues("variantes_stock")?.[index]?.talla}</Badge>
+                        {precioPorVariante && (
+                          <div className="grid grid-cols-2 gap-3">
+                            {(["precio_compra", "precio_venta"] as const).map((campo) => (
+                              <FormField key={campo} control={form.control} name={`variantes_stock.${index}.${campo}`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>{campo === "precio_compra" ? "Compra *" : "Venta *"}</FormLabel>
+                                    <FormControl>
+                                      <Input type="number" step="0.01" min="0" value={field.value ?? ""}
+                                        onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )} />
+                            ))}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-3">
+                          {(["stock", "stock_minimo"] as const).map((campo) => (
+                            <FormField key={campo} control={form.control} name={`variantes_stock.${index}.${campo}`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{campo === "stock" ? "Stock inicial" : "Stock mínimo"}</FormLabel>
+                                  <FormControl>
+                                    <Input type="number" min="0" value={field.value ?? 0}
+                                      onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                          ))}
+                        </div>
+                      </div>
+                    )) : producto?.variantes.map((variante, index) => (
+                      <div key={variante.id} className="space-y-3 rounded-xl border bg-muted/20 p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge variant="secondary">{variante.talla}</Badge>
+                          <span className="text-xs text-muted-foreground">Stock actual: {variante.stock_actual}</span>
+                        </div>
+                        {precioPorVariante && (
+                          <div className="grid grid-cols-2 gap-3">
+                            {(["precio_compra", "precio_venta"] as const).map((campo) => (
+                              <FormField key={campo} control={form.control} name={`precios_variantes.${index}.${campo}`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>{campo === "precio_compra" ? "Compra *" : "Venta *"}</FormLabel>
+                                    <FormControl>
+                                      <Input type="number" step="0.01" min="0" value={field.value ?? ""}
+                                        onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )} />
+                            ))}
+                          </div>
+                        )}
+                        <FormField control={form.control} name={`minimos_variantes.${index}.stock_minimo`}
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-sm font-normal">
-                                <Badge variant="outline" className="mr-1">
-                                  {(variantesFields[index] as any).talla}
-                                </Badge>
-                              </FormLabel>
+                              <FormLabel>Stock mínimo</FormLabel>
                               <FormControl>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  placeholder="0"
-                                  {...field}
-                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                                />
+                                <Input type="number" min="0" value={field.value ?? 0}
+                                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
-                          )}
-                        />
-                      ))}
-                    </div>
+                          )} />
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <FormField
-                    control={form.control}
-                    name="stock_actual"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Stock Inicial</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min="0"
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )
+                </section>
               )}
 
-              <FormField
-                control={form.control}
-                name="stock_minimo"
-                render={({ field }) => (
+              {modo === "crear" && !usandoVariantes && (
+                <FormField control={form.control} name="stock_actual" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Stock Mínimo</FormLabel>
+                    <FormLabel>Stock Inicial</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        min="0"
-                        {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                      />
+                      <Input type="number" min="0" {...field}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )}
-              />
+                )} />
+              )}
+
+              {!tieneVariantes && (
+                <FormField control={form.control} name="stock_minimo" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Stock Mínimo</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0" {...field}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
             </div>
 
             <DialogFooter>
@@ -587,5 +711,3 @@ export function ProductoFormDialog({
     </>
   )
 }
-
-

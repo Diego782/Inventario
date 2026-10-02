@@ -120,7 +120,7 @@ export function DetalleVentaDialog({
                         )}
                         {item.variante_talla && (
                           <span className="ml-2 inline-flex items-center rounded bg-primary/10 text-primary px-1.5 py-0.5 text-xs font-semibold">
-                            Talla {item.variante_talla}
+                            Variante {item.variante_talla}
                           </span>
                         )}
                       </TableCell>

@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       const orgId = resultado.ctx.organizacionActiva!.id
       const tallas = await leerTallas(orgId)
       const nombre = input.nombre.trim().toUpperCase()
-      if (tallas.includes(nombre)) return errorConflicto("TALLA_DUPLICADA", 409, "Esa talla ya existe.")
+      if (tallas.includes(nombre)) return errorConflicto("TALLA_DUPLICADA", 409, "Esa variante ya existe.")
       tallas.push(nombre)
       await guardarTallas(tallas, orgId)
       return creado(tallas)
@@ -72,9 +72,9 @@ export async function PUT(req: NextRequest) {
       const orgId = resultado.ctx.organizacionActiva!.id
       const tallas = await leerTallas(orgId)
       const idx = tallas.indexOf(input.nombre.trim().toUpperCase())
-      if (idx === -1) return errorNoEncontrado("NO_ENCONTRADO", "Talla no encontrada.")
+      if (idx === -1) return errorNoEncontrado("NO_ENCONTRADO", "Variante no encontrada.")
       const nuevo = input.nuevo.trim().toUpperCase()
-      if (tallas.includes(nuevo) && nuevo !== tallas[idx]) return errorConflicto("TALLA_DUPLICADA", 409, "Esa talla ya existe.")
+      if (tallas.includes(nuevo) && nuevo !== tallas[idx]) return errorConflicto("TALLA_DUPLICADA", 409, "Esa variante ya existe.")
       tallas[idx] = nuevo
       await guardarTallas(tallas, orgId)
       return ok(tallas)
@@ -96,7 +96,7 @@ export async function DELETE(req: NextRequest) {
       const tallas = await leerTallas(orgId)
       const nombre = input.nombre.trim().toUpperCase()
       const filtrado = tallas.filter((t) => t !== nombre)
-      if (filtrado.length === tallas.length) return errorNoEncontrado("NO_ENCONTRADO", "Talla no encontrada.")
+      if (filtrado.length === tallas.length) return errorNoEncontrado("NO_ENCONTRADO", "Variante no encontrada.")
       await guardarTallas(filtrado, orgId)
       return ok(filtrado)
     } catch (e) {

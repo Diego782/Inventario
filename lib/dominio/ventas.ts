@@ -18,6 +18,8 @@ import {
   ClienteNoEncontradoError,
   PlazoDeudaInvalidoError,
   DescuentoInvalidoError,
+  PrecioDesactualizadoError,
+  PrecioVarianteInvalidoError,
 } from "@/lib/api/errores"
 import { detectarStockCritico, detectarStockCero, estadoStock } from "@/lib/dominio/notificaciones"
 import { calcularTotalesVenta } from "@/lib/dominio/descuentos"
@@ -26,6 +28,7 @@ import { CONFIG_DEFAULTS, COLOR_TEMA_DEGO } from "@/lib/schemas/configuracion"
 import type { ConfiguracionMap } from "@/lib/schemas/configuracion"
 import type { CrearVentaInput } from "@/lib/schemas/venta"
 import type { Venta, VentaItem } from "@prisma/client"
+import { precioEfectivo } from "@/lib/precio-variantes"
 
 // ---- Tipos ----
 
@@ -107,7 +110,7 @@ export async function registrarVenta(
         const cfg = await leerConfiguracionTx(tx, input.organizacion_id)
 
         // 2. Obtener productos con lock (SELECT para validación)
-        const productoIds = input.items.map((i) => i.producto_id)
+        const productoIds = [...new Set(input.items.map((i) => i.producto_id))]
         const productos = await tx.producto.findMany({
           where: { id: { in: productoIds }, activo: true, organizacion_id: input.organizacion_id },
         })
@@ -138,6 +141,10 @@ export async function registrarVenta(
               `Producto ${item.producto_id} no encontrado`
             )
 
+          if (producto.precio_por_variante && !item.variante_id) {
+            throw new PrecioVarianteInvalidoError()
+          }
+
           if (item.variante_id) {
             const variante = varianteMap.get(item.variante_id)
             if (!variante || variante.producto_id !== item.producto_id) {
@@ -156,9 +163,23 @@ export async function registrarVenta(
           }
         }
 
+        // En modo de precios por variante la BD es la fuente del importe.
+        // Una pestaña con un carrito anterior debe actualizarse antes de cobrar.
+        const preciosUnitarios = input.items.map((item) => {
+          const producto = productoMap.get(item.producto_id)!
+          if (!producto.precio_por_variante) return item.precio_unitario
+          const variante = varianteMap.get(item.variante_id!)
+          if (variante?.precio_venta == null) throw new PrecioVarianteInvalidoError()
+          const precio = precioEfectivo(producto, variante)
+          if (Math.abs(precio - item.precio_unitario) > 0.001) {
+            throw new PrecioDesactualizadoError()
+          }
+          return precio
+        })
+
         // 4. Calcular totales con descuentos y redondeo bancario (Req 7)
-        const lineas = input.items.map((i) => ({
-          precio_unitario: i.precio_unitario,
+        const lineas = input.items.map((i, index) => ({
+          precio_unitario: preciosUnitarios[index],
           cantidad: i.cantidad,
           descuento_producto: i.descuento_producto,
         }))
@@ -233,7 +254,10 @@ export async function registrarVenta(
               producto_id: item.producto_id,
               variante_id: item.variante_id ?? null,
               cantidad: item.cantidad,
-              precio_unitario: item.precio_unitario,
+              precio_compra_unitario: producto.precio_por_variante && item.variante_id
+                ? (varianteMap.get(item.variante_id) as any)?.precio_compra ?? producto.precio_compra
+                : producto.precio_compra,
+              precio_unitario: preciosUnitarios[idx],
               subtotal_linea: subtotalLinea,
               organizacion_id: input.organizacion_id,
             },
@@ -282,7 +306,7 @@ export async function registrarVenta(
               cantidad: -item.cantidad,
               stock_resultante: nuevoStockProducto,
               motivo: item.variante_id
-                ? `Venta ${folio} (talla ${(varianteMap.get(item.variante_id) as any)?.talla ?? ""})`
+                ? `Venta ${folio} (variante ${(varianteMap.get(item.variante_id) as any)?.talla ?? ""})`
                 : `Venta ${folio}`,
               referencia_id: venta.id,
               usuario_id: input.usuario_id ?? null,
@@ -340,6 +364,8 @@ export async function registrarVenta(
       e instanceof ClienteNoEncontradoError ||
       e instanceof PlazoDeudaInvalidoError ||
       e instanceof DescuentoInvalidoError
+      || e instanceof PrecioDesactualizadoError
+      || e instanceof PrecioVarianteInvalidoError
     ) {
       throw e
     }

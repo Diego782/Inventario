@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import type { ProductoDTO } from "@/lib/api/serializadores"
+import type { ProductoDTO, VarianteDTO } from "@/lib/api/serializadores"
+import { precioEfectivo } from "@/lib/precio-variantes"
 
 interface EtiquetaPreviewProps {
   producto: ProductoDTO
-  talla?: string
+  variante?: VarianteDTO
 }
 
 function formatearPrecio(valor: number): string {
@@ -19,7 +20,7 @@ function formatearPrecio(valor: number): string {
   }).format(valor)
 }
 
-export function EtiquetaPreview({ producto, talla }: EtiquetaPreviewProps) {
+export function EtiquetaPreview({ producto, variante }: EtiquetaPreviewProps) {
   const svgRef = useRef<SVGSVGElement>(null)
 
   useEffect(() => {
@@ -51,11 +52,13 @@ export function EtiquetaPreview({ producto, talla }: EtiquetaPreviewProps) {
       )}
       <div className="flex items-center justify-center gap-2 mt-1">
         <p className="text-sm font-bold">
-          {formatearPrecio(producto.precio_venta)}
+          {producto.precio_por_variante && !variante
+            ? "Selecciona variante"
+            : formatearPrecio(precioEfectivo(producto, variante))}
         </p>
-        {talla && (
+        {variante && (
           <span className="text-sm font-bold">
-            — Talla: {talla}
+            — Variante: {variante.talla}
           </span>
         )}
       </div>

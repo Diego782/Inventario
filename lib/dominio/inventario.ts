@@ -10,12 +10,15 @@ import {
   ProductoNoEncontradoError,
   StockNegativoError,
   TallaInvalidaError,
+  PrecioVarianteInvalidoError,
+  StockMinimoVarianteInvalidoError,
   UsarAjusteStockError,
 } from "@/lib/api/errores"
 import type { CrearProductoInput, EditarProductoInput, AjusteStockInput } from "@/lib/schemas/producto"
 import type { Producto, MovimientoStock } from "@prisma/client"
 import { detectarStockCritico, detectarStockCero, estadoStock } from "@/lib/dominio/notificaciones"
 import { redondearBancario } from "@/lib/money"
+import { precioCompraEfectivo, precioEfectivo } from "@/lib/precio-variantes"
 
 // ---- Helpers ----
 
@@ -78,29 +81,47 @@ export async function crearProducto(input: CrearProductoInput, organizacion_id: 
   const codigoBarras = input.codigo_barras || (await generarCodigoUnico(organizacion_id))
 
   const tieneVariantes = Array.isArray(input.variantes_stock) && input.variantes_stock.length > 0
+  if (input.precio_por_variante && (!tieneVariantes || input.variantes_stock!.some((v) => v.precio_compra == null || v.precio_venta == null))) {
+    throw new PrecioVarianteInvalidoError()
+  }
 
   // El stock del producto raíz es la suma de variantes (o el valor directo si no hay variantes)
   const stockTotal = tieneVariantes
     ? input.variantes_stock!.reduce((sum, v) => sum + v.stock, 0)
     : (input.stock_actual ?? 0)
+  const minimosVariantes = tieneVariantes
+    ? input.variantes_stock!.map((variante, index, todas) => variante.stock_minimo
+      ?? Math.floor((input.stock_minimo ?? 0) / todas.length)
+        + (index < (input.stock_minimo ?? 0) % todas.length ? 1 : 0))
+    : []
 
   return prisma.producto.create({
     data: {
       codigo_barras: codigoBarras,
       nombre: input.nombre,
       categoria_id: input.categoria_id ?? null,
-      precio_compra: input.precio_compra ?? 0,
-      precio_venta: input.precio_venta,
+      precio_compra: input.precio_por_variante
+        ? Math.min(...input.variantes_stock!.map((v) => v.precio_compra!))
+        : (input.precio_compra ?? 0),
+      precio_venta: input.precio_por_variante
+        ? Math.min(...input.variantes_stock!.map((v) => v.precio_venta!))
+        : input.precio_venta,
+      precio_por_variante: input.precio_por_variante ?? false,
       stock_actual: stockTotal,
-      stock_minimo: input.stock_minimo ?? 0,
+      stock_minimo: tieneVariantes
+        ? minimosVariantes.reduce((sum, minimo) => sum + minimo, 0)
+        : (input.stock_minimo ?? 0),
       unidad: input.unidad ?? "unidad",
       talla: tieneVariantes ? null : (input.talla ?? null),
       organizacion_id,
       ...(tieneVariantes && {
         variantes: {
-          create: input.variantes_stock!.map((v) => ({
+          create: input.variantes_stock!.map((v, index) => ({
             talla: v.talla,
             stock_actual: v.stock,
+            stock_minimo: minimosVariantes[index],
+            precio_compra: input.precio_por_variante ? v.precio_compra : null,
+            precio_venta: input.precio_por_variante ? v.precio_venta : null,
           })),
         },
       }),
@@ -118,10 +139,6 @@ export async function editarProducto(
   input: EditarProductoInput,
   organizacion_id: string
 ): Promise<Producto> {
-  // Verificar que el producto existe y pertenece al tenant
-  const existente = await prisma.producto.findFirst({ where: { id, organizacion_id } })
-  if (!existente) throw new ProductoNoEncontradoError()
-
   // Rechazar cambios a stock_actual
   if ("stock_actual" in input && input.stock_actual !== undefined) {
     throw new UsarAjusteStockError()
@@ -129,19 +146,94 @@ export async function editarProducto(
 
   validarCodigoBarras(input.codigo_barras)
 
-  return prisma.producto.update({
-    where: { id },
-    data: {
-      ...(input.codigo_barras !== undefined && { codigo_barras: input.codigo_barras }),
+  return prisma.$transaction(async (tx) => {
+    const existente = await tx.producto.findFirst({
+      where: { id, organizacion_id },
+      include: { variantes: true },
+    })
+    if (!existente) throw new ProductoNoEncontradoError()
+
+    let preciosActualizados: Array<{ variante_id: string; precio_compra: number; precio_venta: number }> | undefined
+    if (input.precio_por_variante === true || input.precios_variantes !== undefined) {
+      const precios = input.precios_variantes ?? []
+      const ids = new Set(precios.map((p) => p.variante_id))
+      if (
+        !existente.variantes.length ||
+        precios.length !== existente.variantes.length ||
+        ids.size !== precios.length ||
+        existente.variantes.some((v) => !ids.has(v.id)) ||
+        precios.some((p) => !Number.isFinite(p.precio_venta) || p.precio_venta < 0 || (p.precio_compra !== undefined && (!Number.isFinite(p.precio_compra) || p.precio_compra < 0)))
+      ) throw new PrecioVarianteInvalidoError()
+      preciosActualizados = precios.map((precio) => ({
+        ...precio,
+        precio_compra: precio.precio_compra ?? Number(existente.variantes.find((v) => v.id === precio.variante_id)?.precio_compra ?? existente.precio_compra),
+      }))
+      for (const precio of preciosActualizados) {
+        await tx.varianteProducto.update({
+          where: { id: precio.variante_id },
+          data: { precio_compra: precio.precio_compra, precio_venta: precio.precio_venta },
+        })
+      }
+    }
+
+    if (input.precio_por_variante === false && existente.precio_por_variante) {
+      if (input.precio_compra === undefined || input.precio_venta === undefined) throw new PrecioVarianteInvalidoError()
+      await tx.varianteProducto.updateMany({
+        where: { producto_id: id },
+        data: { precio_compra: null, precio_venta: null },
+      })
+    }
+
+    let minimoTotal: number | undefined
+    if (input.minimos_variantes !== undefined) {
+      const minimos = input.minimos_variantes
+      const ids = new Set(minimos.map((m) => m.variante_id))
+      if (
+        minimos.length !== existente.variantes.length ||
+        ids.size !== minimos.length ||
+        existente.variantes.some((v) => !ids.has(v.id)) ||
+        minimos.some((m) => !Number.isInteger(m.stock_minimo) || m.stock_minimo < 0)
+      ) throw new StockMinimoVarianteInvalidoError()
+      for (const minimo of minimos) {
+        await tx.varianteProducto.update({
+          where: { id: minimo.variante_id },
+          data: { stock_minimo: minimo.stock_minimo },
+        })
+      }
+      minimoTotal = minimos.reduce((sum, minimo) => sum + minimo.stock_minimo, 0)
+    } else if (input.stock_minimo !== undefined && existente.variantes.length > 0) {
+      // Compatibilidad con clientes antiguos que solo envían un mínimo común.
+      for (const [index, variante] of existente.variantes.entries()) {
+        await tx.varianteProducto.update({
+          where: { id: variante.id },
+          data: { stock_minimo: Math.floor(input.stock_minimo / existente.variantes.length)
+            + (index < input.stock_minimo % existente.variantes.length ? 1 : 0) },
+        })
+      }
+      minimoTotal = input.stock_minimo
+    }
+
+    return tx.producto.update({
+      where: { id },
+      data: {
+      ...(input.codigo_barras != null && input.codigo_barras !== "" && { codigo_barras: input.codigo_barras }),
       ...(input.nombre !== undefined && { nombre: input.nombre }),
       ...(input.categoria_id !== undefined && { categoria_id: input.categoria_id || null }),
-      ...(input.precio_compra !== undefined && { precio_compra: input.precio_compra }),
-      ...(input.precio_venta !== undefined && { precio_venta: input.precio_venta }),
-      ...(input.stock_minimo !== undefined && { stock_minimo: input.stock_minimo }),
+      ...(preciosActualizados
+        ? { precio_compra: Math.min(...preciosActualizados.map((p) => p.precio_compra)) }
+        : input.precio_compra !== undefined && { precio_compra: input.precio_compra }),
+      ...(preciosActualizados
+        ? { precio_venta: Math.min(...preciosActualizados.map((p) => p.precio_venta)) }
+        : input.precio_venta !== undefined && { precio_venta: input.precio_venta }),
+      ...(input.precio_por_variante !== undefined && { precio_por_variante: input.precio_por_variante }),
+      ...(minimoTotal !== undefined
+        ? { stock_minimo: minimoTotal }
+        : input.stock_minimo !== undefined && { stock_minimo: input.stock_minimo }),
       ...(input.unidad !== undefined && { unidad: input.unidad }),
       ...(input.talla !== undefined && { talla: input.talla }),
-    },
-    include: { variantes: true },
+      },
+      include: { variantes: true },
+    })
   })
 }
 
@@ -374,10 +466,26 @@ export async function listarProductos(params: {
   }
 
   const precioVenta = rango(precio_venta_min, precio_venta_max)
-  if (precioVenta) where.precio_venta = precioVenta
+  if (precioVenta) {
+    where.AND = [
+      ...(where.AND ?? []),
+      { OR: [
+        { precio_por_variante: false, precio_venta: precioVenta },
+        { precio_por_variante: true, variantes: { some: { precio_venta: precioVenta } } },
+      ] },
+    ]
+  }
 
   const precioCompra = rango(precio_compra_min, precio_compra_max)
-  if (precioCompra) where.precio_compra = precioCompra
+  if (precioCompra) {
+    where.AND = [
+      ...(where.AND ?? []),
+      { OR: [
+        { precio_por_variante: false, precio_compra: precioCompra },
+        { precio_por_variante: true, variantes: { some: { precio_compra: precioCompra } } },
+      ] },
+    ]
+  }
 
   const stockMinimo = rango(stock_minimo_min, stock_minimo_max)
   if (stockMinimo) where.stock_minimo = stockMinimo
@@ -440,7 +548,13 @@ export async function calcularValorInventario(
 ): Promise<{ inversion: number; recaudacionPotencial: number }> {
   const productos = await prisma.producto.findMany({
     where: { organizacion_id, activo: true },
-    select: { precio_compra: true, precio_venta: true, stock_actual: true },
+    select: {
+      precio_compra: true,
+      precio_venta: true,
+      precio_por_variante: true,
+      stock_actual: true,
+      variantes: { select: { precio_compra: true, precio_venta: true, stock_actual: true } },
+    },
   })
 
   let inversionCruda = 0
@@ -451,8 +565,12 @@ export async function calcularValorInventario(
     const compra = p.precio_compra !== null ? Number(p.precio_compra) : 0
     const venta = p.precio_venta !== null ? Number(p.precio_venta) : 0
 
-    inversionCruda += compra * stock
-    recaudacionCruda += venta * stock
+    inversionCruda += p.precio_por_variante && p.variantes.length > 0
+      ? p.variantes.reduce((sum, variante) => sum + precioCompraEfectivo(p, variante) * variante.stock_actual, 0)
+      : compra * stock
+    recaudacionCruda += p.precio_por_variante && p.variantes.length > 0
+      ? p.variantes.reduce((sum, variante) => sum + precioEfectivo(p, variante) * variante.stock_actual, 0)
+      : venta * stock
   }
 
   return {

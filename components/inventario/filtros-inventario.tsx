@@ -279,7 +279,7 @@ export function FiltrosInventario({ filtros, onAplicar }: FiltrosInventarioProps
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Talla</Label>
+            <Label className="text-xs">Variante</Label>
             <Select
               value={borrador.talla ?? SIN_VALOR}
               onValueChange={(v) =>

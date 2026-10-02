@@ -26,7 +26,7 @@ interface AgregarProductoVentaProps {
   onAgregarSimple: (producto: ProductoDTO) => void
   onAgregarVariante: (
     producto: ProductoDTO,
-    variante: { id: string; talla: string; stock_actual: number },
+    variante: VarianteDTO,
     cantidad: number
   ) => void
 }
@@ -91,7 +91,7 @@ export function AgregarProductoVenta({
       if (!variante) return
       onAgregarVariante(
         seleccionado,
-        { id: variante.id, talla: variante.talla, stock_actual: variante.stock_actual },
+        variante,
         cantidad
       )
     } else {
@@ -140,8 +140,8 @@ export function AgregarProductoVenta({
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{p.nombre}</p>
                 <p className="text-xs text-muted-foreground">
-                  {formatMXN(p.precio_venta)} · Stock: {p.stock_actual}
-                  {(p.variantes?.length ?? 0) > 0 && " · con tallas"}
+                  {p.precio_por_variante ? "Precios por variante" : formatMXN(p.precio_venta)} · Stock: {p.stock_actual}
+                  {(p.variantes?.length ?? 0) > 0 && " · con variantes"}
                 </p>
               </div>
               <Plus className="w-4 h-4 shrink-0 text-muted-foreground" />
@@ -158,10 +158,10 @@ export function AgregarProductoVenta({
           <div className="flex items-end gap-2">
             {(seleccionado.variantes?.length ?? 0) > 0 && (
               <div className="flex-1">
-                <label className="text-xs text-muted-foreground">Talla</label>
+                <label className="text-xs text-muted-foreground">Variante</label>
                 <Select value={varianteId} onValueChange={setVarianteId}>
                   <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Talla" />
+                    <SelectValue placeholder="Variante" />
                   </SelectTrigger>
                   <SelectContent>
                     {seleccionado.variantes!.map((v) => (
@@ -170,7 +170,7 @@ export function AgregarProductoVenta({
                         value={v.id}
                         disabled={v.stock_actual <= 0}
                       >
-                        {v.talla} ({v.stock_actual} disp.)
+                        {v.talla} ({v.stock_actual} disp.) · {formatMXN(seleccionado.precio_por_variante ? v.precio_venta ?? seleccionado.precio_venta : seleccionado.precio_venta)}
                       </SelectItem>
                     ))}
                   </SelectContent>

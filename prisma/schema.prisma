@@ -87,6 +87,7 @@ model Producto {
   categoria       Categoria?   @relation(fields: [categoria_id], references: [id])
   precio_compra   Decimal      @default(0) @db.Decimal(12, 2)
   precio_venta    Decimal      @db.Decimal(12, 2)
+  precio_por_variante Boolean   @default(false)
   stock_actual    Int          @default(0)
   stock_minimo    Int          @default(0)
   unidad          String       @default("unidad") @db.VarChar(16)
@@ -166,6 +167,7 @@ model VentaItem {
   variante_id     String?           @db.Char(36)
   variante        VarianteProducto? @relation(fields: [variante_id], references: [id], onDelete: SetNull)
   cantidad        Int
+  precio_compra_unitario Decimal? @db.Decimal(12, 2)
   precio_unitario Decimal           @db.Decimal(12, 2)
   subtotal_linea  Decimal           @db.Decimal(12, 2)
 
@@ -193,6 +195,9 @@ model VarianteProducto {
   producto      Producto @relation(fields: [producto_id], references: [id], onDelete: Cascade)
   talla         String   @db.VarChar(20)
   stock_actual  Int      @default(0)
+  stock_minimo  Int      @default(0)
+  precio_compra Decimal? @db.Decimal(12, 2)
+  precio_venta  Decimal? @db.Decimal(12, 2)
   codigo_barras String?  @unique @db.VarChar(48)
 
   venta_items VentaItem[]

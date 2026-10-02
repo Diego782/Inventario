@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Label } from "@/components/ui/label"
 import { calcularTotalesVenta, DescuentoInvalidoError } from "@/lib/dominio/descuentos"
-import type { ItemCarrito } from "@/lib/carrito"
+import { precioLinea, type ItemCarrito } from "@/lib/carrito"
 
 // ---- Tipos ----
 
@@ -72,7 +72,7 @@ export function calcularTotalesConDescuentos(
   const lineas = items.map((item) => {
     const clave = claveDe(item)
     return {
-      precio_unitario: item.producto.precio_venta,
+      precio_unitario: precioLinea(item),
       cantidad: item.cantidad,
       descuento_producto: descuentosProducto[clave] ?? 0,
     }
@@ -91,7 +91,7 @@ export function calcularTotalesConDescuentos(
   } catch (err) {
     // Error de descuento inválido: devolver totales sin descuentos aplicados
     const subtotalesLinea = items.map((item) =>
-      item.producto.precio_venta * item.cantidad
+      precioLinea(item) * item.cantidad
     )
     const subtotal = subtotalesLinea.reduce((acc, v) => acc + v, 0)
     const impuesto = porcentajeImpuesto > 0 ? subtotal * porcentajeImpuesto / 100 : 0
@@ -167,7 +167,7 @@ export function CarritoTable({
               const clave = claveDe(item)
               const tope = item.stock_disponible ?? item.producto.stock_actual
               const descProd = descuentosProducto[clave] ?? 0
-              const subtotalBruto = item.producto.precio_venta * item.cantidad
+              const subtotalBruto = precioLinea(item) * item.cantidad
               const subtotalLinea = totales.subtotalesLinea[idx] ?? subtotalBruto
               const descExcedeLinea = descProd > subtotalBruto
 
@@ -179,7 +179,7 @@ export function CarritoTable({
                         {item.producto.nombre}
                         {item.variante_talla && (
                           <span className="ml-2 inline-flex items-center rounded bg-primary/10 text-primary px-1.5 py-0.5 text-xs font-semibold">
-                            Talla {item.variante_talla}
+                            Variante {item.variante_talla}
                           </span>
                         )}
                       </p>
@@ -187,7 +187,7 @@ export function CarritoTable({
                     </div>
                   </TableCell>
                   <TableCell className="text-right text-sm whitespace-nowrap">
-                    {formatMXN(item.producto.precio_venta)}
+                    {formatMXN(precioLinea(item))}
                   </TableCell>
                   <TableCell className="text-center">
                     <Input

@@ -54,6 +54,7 @@ export function ImprimirEtiquetaDialog({
   const [imprimiendo, setImprimiendo] = useState(false)
   const [incluirTalla, setIncluirTalla] = useState(false)
   const [tallaSeleccionada, setTallaSeleccionada] = useState("")
+  const varianteSeleccionada = producto?.variantes.find((v) => v.talla === tallaSeleccionada)
 
   const form = useForm<CantidadInput>({
     resolver: zodResolver(cantidadSchema),
@@ -64,6 +65,10 @@ export function ImprimirEtiquetaDialog({
 
   async function handleImprimir(values: CantidadInput) {
     if (!producto) return
+    if (producto.precio_por_variante && !varianteSeleccionada) {
+      toast.error("Selecciona una variante para imprimir su precio.")
+      return
+    }
     setImprimiendo(true)
 
     try {
@@ -72,7 +77,7 @@ export function ImprimirEtiquetaDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cantidad: values.cantidad,
-          talla: incluirTalla && tallaSeleccionada ? tallaSeleccionada : undefined,
+          variante_id: (producto.precio_por_variante || incluirTalla) ? varianteSeleccionada?.id : undefined,
         }),
       })
 
@@ -206,10 +211,10 @@ export function ImprimirEtiquetaDialog({
               )}
             />
 
-            {/* Opción de incluir talla */}
+            {/* El precio por variante requiere seleccionar la variante para la etiqueta. */}
             {producto.variantes && producto.variantes.length > 0 && (
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
+                {!producto.precio_por_variante && <div className="flex items-center gap-2">
                   <Checkbox
                     id="incluir-talla"
                     checked={incluirTalla}
@@ -219,13 +224,13 @@ export function ImprimirEtiquetaDialog({
                     }}
                   />
                   <label htmlFor="incluir-talla" className="text-sm cursor-pointer">
-                    Incluir talla en la etiqueta
+                    Incluir variante en la etiqueta
                   </label>
-                </div>
-                {incluirTalla && (
+                </div>}
+                {(producto.precio_por_variante || incluirTalla) && (
                   <Select value={tallaSeleccionada} onValueChange={setTallaSeleccionada}>
                     <SelectTrigger className="w-32 h-8">
-                      <SelectValue placeholder="Talla" />
+                      <SelectValue placeholder="Variante" />
                     </SelectTrigger>
                     <SelectContent>
                       {producto.variantes.map((v) => (
@@ -239,14 +244,14 @@ export function ImprimirEtiquetaDialog({
 
             <div>
               <p className="text-sm text-muted-foreground mb-2">Vista previa:</p>
-              <EtiquetaPreview producto={producto} talla={incluirTalla ? tallaSeleccionada : undefined} />
+              <EtiquetaPreview producto={producto} variante={(producto.precio_por_variante || incluirTalla) ? varianteSeleccionada : undefined} />
             </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={imprimiendo}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={imprimiendo}>
+              <Button type="submit" disabled={imprimiendo || (!!producto.precio_por_variante && !varianteSeleccionada)}>
                 <Printer className="w-4 h-4 mr-2" />
                 {imprimiendo ? "Imprimiendo..." : `Imprimir ${cantidad} etiqueta(s)`}
               </Button>

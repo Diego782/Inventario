@@ -25,7 +25,10 @@ export type VarianteDTO = {
   id: string
   talla: string
   stock_actual: number
+  stock_minimo: number
   codigo_barras: string | null
+  precio_compra?: number | null
+  precio_venta?: number | null
 }
 
 export type ProductoDTO = {
@@ -35,6 +38,7 @@ export type ProductoDTO = {
   categoria_id: string | null
   precio_compra: number
   precio_venta: number
+  precio_por_variante?: boolean
   stock_actual: number
   stock_minimo: number
   unidad: string
@@ -160,7 +164,10 @@ export function toProductoDTO(p: PProducto & { variantes?: PVariante[] }): Produ
     id: v.id,
     talla: v.talla,
     stock_actual: v.stock_actual,
+    stock_minimo: v.stock_minimo,
     codigo_barras: v.codigo_barras,
+    precio_compra: v.precio_compra === null ? null : redondearBancario(Number(v.precio_compra)),
+    precio_venta: v.precio_venta === null ? null : redondearBancario(Number(v.precio_venta)),
   }))
 
   // Si tiene variantes, el stock total es la suma de las variantes
@@ -175,6 +182,7 @@ export function toProductoDTO(p: PProducto & { variantes?: PVariante[] }): Produ
     categoria_id: p.categoria_id,
     precio_compra: redondearBancario(Number(p.precio_compra)),
     precio_venta: redondearBancario(Number(p.precio_venta)),
+    precio_por_variante: p.precio_por_variante,
     stock_actual: stockTotal,
     stock_minimo: p.stock_minimo,
     unidad: p.unidad,

@@ -33,7 +33,7 @@ export function GestionarTallasDialog({ open, onClose, onCambio }: GestionarTall
       const data = await res.json()
       setTallas(Array.isArray(data) ? data : [])
     } catch {
-      toast.error("Error al cargar tallas")
+      toast.error("Error al cargar variantes")
     } finally {
       setCargando(false)
     }
@@ -52,13 +52,13 @@ export function GestionarTallasDialog({ open, onClose, onCambio }: GestionarTall
       })
       if (!res.ok) {
         const data = await res.json().catch(() => null)
-        toast.error(data?.error?.mensaje ?? "Error al crear talla")
+        toast.error(data?.error?.mensaje ?? "Error al crear variante")
         return
       }
       setNueva("")
       await cargar()
       onCambio()
-      toast.success("Talla creada")
+      toast.success("Variante creada")
     } catch {
       toast.error("Error de conexión")
     } finally {
@@ -82,14 +82,14 @@ export function GestionarTallasDialog({ open, onClose, onCambio }: GestionarTall
       setEditandoIdx(null)
       await cargar()
       onCambio()
-      toast.success("Talla actualizada")
+      toast.success("Variante actualizada")
     } catch {
       toast.error("Error de conexión")
     }
   }
 
   async function handleEliminar(nombre: string) {
-    if (!confirm(`¿Eliminar la talla "${nombre}"?`)) return
+    if (!confirm(`¿Eliminar la variante "${nombre}"?`)) return
     try {
       const res = await fetch("/api/tallas", {
         method: "DELETE",
@@ -103,7 +103,7 @@ export function GestionarTallasDialog({ open, onClose, onCambio }: GestionarTall
       }
       await cargar()
       onCambio()
-      toast.success("Talla eliminada")
+      toast.success("Variante eliminada")
     } catch {
       toast.error("Error de conexión")
     }
@@ -113,12 +113,12 @@ export function GestionarTallasDialog({ open, onClose, onCambio }: GestionarTall
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Gestionar Tallas</DialogTitle>
+          <DialogTitle>Gestionar Variantes</DialogTitle>
         </DialogHeader>
 
         <div className="flex gap-2">
           <Input
-            placeholder="Nueva talla (ej: XL, 42, 10)..."
+            placeholder="Nueva variante (ej: XL, rojo, 1 L)..."
             value={nueva}
             onChange={(e) => setNueva(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleCrear()}
@@ -133,7 +133,7 @@ export function GestionarTallasDialog({ open, onClose, onCambio }: GestionarTall
         <div className="max-h-60 overflow-y-auto space-y-1 mt-2">
           {cargando && <p className="text-sm text-muted-foreground">Cargando...</p>}
           {!cargando && tallas.length === 0 && (
-            <p className="text-sm text-muted-foreground">No hay tallas</p>
+            <p className="text-sm text-muted-foreground">No hay variantes</p>
           )}
           {tallas.map((t, i) => (
             <div key={t} className="flex items-center gap-2 py-1 px-2 rounded hover:bg-muted/50 group">

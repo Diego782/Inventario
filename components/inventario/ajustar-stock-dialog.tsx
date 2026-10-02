@@ -41,6 +41,11 @@ export function AjustarStockDialog({
         <VariantesEditor
           productoId={producto.id}
           variantes={producto.variantes ?? []}
+          stockActualComun={producto.stock_actual}
+          stockMinimoComun={producto.stock_minimo}
+          precioPorVariante={producto.precio_por_variante ?? false}
+          precioCompraComun={producto.precio_compra}
+          precioVentaComun={producto.precio_venta}
           onCambio={onAjustado}
         />
 

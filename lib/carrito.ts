@@ -5,6 +5,7 @@
  */
 import { redondearBancario } from "@/lib/money"
 import type { ProductoDTO } from "@/lib/api/serializadores"
+import { precioEfectivo } from "@/lib/precio-variantes"
 
 // ---- Tipos ----
 
@@ -16,6 +17,7 @@ export type ItemCarrito = {
   variante_talla?: string | null
   /** Stock disponible de la variante seleccionada (o del producto si no hay variante). */
   stock_disponible?: number
+  precio_unitario?: number
 }
 
 export type CarritoTotales = {
@@ -31,6 +33,10 @@ export function claveItem(producto_id: string, variante_id?: string | null): str
   return variante_id ? `${producto_id}::${variante_id}` : producto_id
 }
 
+export function precioLinea(item: ItemCarrito): number {
+  return item.precio_unitario ?? item.producto.precio_venta
+}
+
 /**
  * Calcula subtotal, impuestos y total del carrito.
  * Usa redondeo bancario (half-to-even) en todos los montos.
@@ -40,7 +46,7 @@ export function calcularTotales(
   porcentaje_impuesto: number
 ): CarritoTotales {
   const subtotal = redondearBancario(
-    items.reduce((acc, item) => acc + item.producto.precio_venta * item.cantidad, 0)
+    items.reduce((acc, item) => acc + precioLinea(item) * item.cantidad, 0)
   )
   const impuestos = redondearBancario((subtotal * porcentaje_impuesto) / 100)
   const total = redondearBancario(subtotal + impuestos)
@@ -82,7 +88,7 @@ export function agregarOIncrementar(
   }
 
   return {
-    items: [...items, { producto, cantidad: 1, stock_disponible: producto.stock_actual }],
+    items: [...items, { producto, cantidad: 1, stock_disponible: producto.stock_actual, precio_unitario: producto.precio_venta }],
     excedeStock: false,
   }
 }
@@ -95,7 +101,7 @@ export function agregarOIncrementar(
 export function agregarConVariante(
   items: ItemCarrito[],
   producto: ProductoDTO,
-  variante: { id: string; talla: string; stock_actual: number },
+  variante: { id: string; talla: string; stock_actual: number; precio_venta?: number | null },
   cantidad: number,
   permitir_sobreventa: boolean
 ): { items: ItemCarrito[]; excedeStock: boolean } {
@@ -130,6 +136,7 @@ export function agregarConVariante(
         variante_id: variante.id,
         variante_talla: variante.talla,
         stock_disponible: variante.stock_actual,
+        precio_unitario: precioEfectivo(producto, variante),
       },
     ],
     excedeStock: false,
@@ -180,6 +187,6 @@ export function serializarParaApi(items: ItemCarrito[]): Array<{
     producto_id: item.producto.id,
     variante_id: item.variante_id ?? null,
     cantidad: item.cantidad,
-    precio_unitario: item.producto.precio_venta,
+    precio_unitario: precioLinea(item),
   }))
 }

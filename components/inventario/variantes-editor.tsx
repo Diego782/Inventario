@@ -18,19 +18,33 @@ import type { VarianteDTO } from "@/lib/api/serializadores"
 interface VariantesEditorProps {
   productoId: string
   variantes: VarianteDTO[]
+  stockActualComun: number
+  stockMinimoComun: number
+  precioPorVariante: boolean
+  precioCompraComun: number
+  precioVentaComun: number
   onCambio: () => void
 }
 
-export function VariantesEditor({ productoId, variantes: variantesIniciales, onCambio }: VariantesEditorProps) {
+export function VariantesEditor({ productoId, variantes: variantesIniciales, stockActualComun, stockMinimoComun, precioPorVariante, precioCompraComun, precioVentaComun, onCambio }: VariantesEditorProps) {
   const [variantes, setVariantes] = useState<VarianteDTO[]>(variantesIniciales)
   const [tallasDisponibles, setTallasDisponibles] = useState<string[]>([])
   const [nuevaTalla, setNuevaTalla] = useState("")
-  const [nuevoStock, setNuevoStock] = useState(0)
+  const [nuevoStock, setNuevoStock] = useState(variantesIniciales.length === 0 ? stockActualComun : 0)
+  const [nuevoStockMinimo, setNuevoStockMinimo] = useState(variantesIniciales.length === 0 ? stockMinimoComun : 0)
+  const [nuevoPrecioCompra, setNuevoPrecioCompra] = useState<number | null>(null)
+  const [nuevoPrecioVenta, setNuevoPrecioVenta] = useState<number | null>(null)
   const [agregando, setAgregando] = useState(false)
   const [gestionarTallas, setGestionarTallas] = useState(false)
 
   // Sincronizar si cambian las variantes provistas (p. ej. al abrir otro producto)
-  useEffect(() => { setVariantes(variantesIniciales) }, [variantesIniciales])
+  useEffect(() => {
+    setVariantes(variantesIniciales)
+    if (variantesIniciales.length === 0) {
+      setNuevoStock(stockActualComun)
+      setNuevoStockMinimo(stockMinimoComun)
+    }
+  }, [variantesIniciales, stockActualComun, stockMinimoComun])
 
   function cargarTallas() {
     fetch("/api/tallas")
@@ -62,13 +76,19 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, onC
   )
 
   async function handleAgregar() {
-    if (!nuevaTalla) return
+    if (!nuevaTalla || (precioPorVariante && (nuevoPrecioCompra === null || nuevoPrecioVenta === null))) return
     setAgregando(true)
     try {
       const res = await fetch(`/api/productos/${productoId}/variantes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ talla: nuevaTalla, stock_actual: nuevoStock }),
+        body: JSON.stringify({
+          talla: nuevaTalla,
+          stock_actual: nuevoStock,
+          stock_minimo: nuevoStockMinimo,
+          precio_compra: precioPorVariante ? nuevoPrecioCompra : null,
+          precio_venta: precioPorVariante ? nuevoPrecioVenta : null,
+        }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => null)
@@ -77,8 +97,11 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, onC
       }
       setNuevaTalla("")
       setNuevoStock(0)
+      setNuevoStockMinimo(0)
+      setNuevoPrecioCompra(null)
+      setNuevoPrecioVenta(null)
       await recargarVariantes()
-      toast.success(`Talla ${nuevaTalla} agregada`)
+      toast.success(`Variante ${nuevaTalla} agregada`)
     } catch {
       toast.error("Error de conexión")
     } finally {
@@ -104,8 +127,26 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, onC
     }
   }
 
+  async function handleEditarCampo(varianteId: string, campo: "precio_compra" | "precio_venta" | "stock_minimo", valor: number) {
+    try {
+      const res = await fetch(`/api/productos/${productoId}/variantes`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variante_id: varianteId, [campo]: valor }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error?.mensaje ?? "Error al actualizar variante")
+        return
+      }
+      await recargarVariantes()
+    } catch {
+      toast.error("Error de conexión")
+    }
+  }
+
   async function handleEliminar(varianteId: string, talla: string) {
-    if (!confirm(`¿Eliminar la talla ${talla}?`)) return
+    if (!confirm(`¿Eliminar la variante ${talla}?`)) return
     try {
       const res = await fetch(`/api/productos/${productoId}/variantes`, {
         method: "DELETE",
@@ -118,16 +159,16 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, onC
         return
       }
       await recargarVariantes()
-      toast.success(`Talla ${talla} eliminada`)
+      toast.success(`Variante ${talla} eliminada`)
     } catch {
       toast.error("Error de conexión")
     }
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex items-center gap-1">
-        <p className="text-sm font-medium">Stock por Talla</p>
+        <p className="text-sm font-medium">Variantes</p>
         <Button
           type="button"
           size="icon"
@@ -141,32 +182,54 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, onC
 
       {/* Lista de variantes existentes */}
       {variantes.length > 0 && (
-        <div className="space-y-1">
+        <div className="space-y-3">
           {variantes.map((v) => (
-            <div key={v.id} className="flex items-center gap-2">
-              <span className="text-sm font-medium w-12 text-center bg-muted rounded px-2 py-1">
-                {v.talla}
-              </span>
-              <Input
-                type="number"
-                min="0"
-                defaultValue={v.stock_actual}
-                className="w-20 h-8 text-sm"
-                onBlur={(e) => {
-                  const val = parseInt(e.target.value) || 0
-                  if (val !== v.stock_actual) handleEditarStock(v.id, val)
-                }}
-              />
-              <span className="text-xs text-muted-foreground">unidades</span>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 text-destructive ml-auto"
-                onClick={() => handleEliminar(v.id, v.talla)}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
+            <div key={v.id} className="space-y-3 rounded-xl border bg-muted/20 p-3">
+              <div className="flex items-center justify-between">
+                <span className="rounded-md bg-background px-2 py-1 text-sm font-semibold">{v.talla}</span>
+                <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-destructive"
+                  aria-label={`Eliminar variante ${v.talla}`} onClick={() => handleEliminar(v.id, v.talla)}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+              {precioPorVariante && (
+                <div className="grid grid-cols-2 gap-3">
+                  {(["precio_compra", "precio_venta"] as const).map((campo) => {
+                    const actual = campo === "precio_compra" ? (v.precio_compra ?? precioCompraComun) : (v.precio_venta ?? precioVentaComun)
+                    return <label key={campo} className="space-y-1 text-xs font-medium">
+                      <span>{campo === "precio_compra" ? "Compra" : "Venta"}</span>
+                      <Input key={`${v.id}-${campo}-${actual}`} type="number" min="0" step="0.01"
+                        defaultValue={actual} aria-label={`${campo === "precio_compra" ? "Compra" : "Venta"} de variante ${v.talla}`}
+                        onBlur={(e) => {
+                          const precio = Number(e.target.value)
+                          if (e.target.value === "" || !Number.isFinite(precio) || precio < 0) return
+                          if (precio !== actual) handleEditarCampo(v.id, campo, precio)
+                        }} />
+                    </label>
+                  })}
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <label className="space-y-1 text-xs font-medium">
+                  <span>Stock actual</span>
+                  <Input key={`${v.id}-stock-${v.stock_actual}`} type="number" min="0" defaultValue={v.stock_actual}
+                    aria-label={`Stock actual de variante ${v.talla}`}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value) || 0
+                      if (val !== v.stock_actual) handleEditarStock(v.id, val)
+                    }} />
+                </label>
+                <label className="space-y-1 text-xs font-medium">
+                  <span>Stock mínimo</span>
+                  <Input key={`${v.id}-min-${v.stock_minimo}`} type="number" min="0" defaultValue={v.stock_minimo}
+                    aria-label={`Stock mínimo de variante ${v.talla}`}
+                    onBlur={(e) => {
+                      const minimo = Number(e.target.value)
+                      if (e.target.value === "" || !Number.isInteger(minimo) || minimo < 0) return
+                      if (minimo !== v.stock_minimo) handleEditarCampo(v.id, "stock_minimo", minimo)
+                    }} />
+                </label>
+              </div>
             </div>
           ))}
         </div>
@@ -174,10 +237,10 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, onC
 
       {/* Agregar nueva variante */}
       {tallasLibres.length > 0 && (
-        <div className="flex items-center gap-2 pt-1">
+        <div className="space-y-3 rounded-xl border border-dashed p-3">
           <Select value={nuevaTalla} onValueChange={setNuevaTalla}>
-            <SelectTrigger className="w-20 h-8 text-sm">
-              <SelectValue placeholder="Talla" />
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Variante" />
             </SelectTrigger>
             <SelectContent>
               {tallasLibres.map((t) => (
@@ -185,20 +248,31 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, onC
               ))}
             </SelectContent>
           </Select>
-          <Input
-            type="number"
-            min="0"
-            value={nuevoStock}
-            onChange={(e) => setNuevoStock(parseInt(e.target.value) || 0)}
-            className="w-20 h-8 text-sm"
-            placeholder="Stock"
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <label className="space-y-1 text-xs font-medium"><span>Stock inicial</span>
+              <Input type="number" min="0" value={nuevoStock} onChange={(e) => setNuevoStock(parseInt(e.target.value) || 0)} />
+            </label>
+            <label className="space-y-1 text-xs font-medium"><span>Stock mínimo</span>
+              <Input type="number" min="0" value={nuevoStockMinimo} onChange={(e) => setNuevoStockMinimo(parseInt(e.target.value) || 0)} />
+            </label>
+          </div>
+          {precioPorVariante && (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 text-xs font-medium"><span>Compra</span>
+                <Input type="number" step="0.01" min="0" value={nuevoPrecioCompra ?? ""}
+                  onChange={(e) => setNuevoPrecioCompra(e.target.value === "" ? null : Number(e.target.value))} />
+              </label>
+              <label className="space-y-1 text-xs font-medium"><span>Venta</span>
+                <Input type="number" step="0.01" min="0" value={nuevoPrecioVenta ?? ""}
+                  onChange={(e) => setNuevoPrecioVenta(e.target.value === "" ? null : Number(e.target.value))} />
+              </label>
+            </div>
+          )}
           <Button
             type="button"
             size="sm"
-            className="h-8"
             onClick={handleAgregar}
-            disabled={agregando || !nuevaTalla}
+            disabled={agregando || !nuevaTalla || (precioPorVariante && (nuevoPrecioCompra === null || nuevoPrecioVenta === null))}
           >
             <Plus className="w-3.5 h-3.5 mr-1" />
             Agregar
@@ -207,7 +281,7 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, onC
       )}
 
       {tallasLibres.length === 0 && variantes.length > 0 && (
-        <p className="text-xs text-muted-foreground">Todas las tallas están asignadas.</p>
+        <p className="text-xs text-muted-foreground">Todas las variantes están asignadas.</p>
       )}
 
       <GestionarTallasDialog

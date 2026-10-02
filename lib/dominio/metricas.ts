@@ -113,7 +113,9 @@ export async function agregarMetricas(
     where: { organizacion_id, venta: { estado: "completada", creado_en: enRango } },
     select: {
       cantidad: true,
-      producto: { select: { precio_compra: true } },
+      precio_compra_unitario: true,
+      producto: { select: { precio_compra: true, precio_por_variante: true } },
+      variante: { select: { precio_compra: true } },
       venta: { select: { creado_en: true } },
     },
   })
@@ -149,7 +151,12 @@ export async function agregarMetricas(
   let totalExpenses = 0
   const puntosGastos: Array<{ creado_en: string; valor: number }> = []
   for (const it of items) {
-    const valor = Number(it.producto.precio_compra) * it.cantidad
+    const compra = it.precio_compra_unitario !== null
+      ? Number(it.precio_compra_unitario)
+      : it.producto.precio_por_variante
+      ? Number(it.variante?.precio_compra ?? it.producto.precio_compra)
+      : Number(it.producto.precio_compra)
+    const valor = compra * it.cantidad
     totalExpenses += valor
     puntosGastos.push({ creado_en: it.venta.creado_en.toISOString(), valor })
   }

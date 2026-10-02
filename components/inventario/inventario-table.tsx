@@ -30,6 +30,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import type { ProductoDTO, EstadoStock } from "@/lib/api/serializadores"
 import type { FiltrosInventario } from "@/components/inventario/filtros-inventario"
+import { rangoPrecios } from "@/lib/precio-variantes"
+
+function mostrarPrecio(producto: ProductoDTO): string {
+  const formato = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" })
+  const { minimo, maximo } = rangoPrecios(producto)
+  return minimo === maximo ? formato.format(minimo) : `${formato.format(minimo)} – ${formato.format(maximo)}`
+}
 
 // ---- Tipos ----
 
@@ -188,12 +195,20 @@ export function InventarioTable({ searchTerm, filtros, refreshKey = 0, onAccion 
                   <div>
                     <span className="font-medium">{producto.nombre}</span>
                     {producto.variantes && producto.variantes.length > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        {producto.variantes.map((v) => `${v.talla}: ${v.stock_actual}`).join(" · ")}
-                      </p>
+                      <div className="mt-1 flex flex-wrap gap-1" aria-label="Stock por variante">
+                        {producto.variantes.map((v) => (
+                          <span key={v.id} className={
+                            v.stock_actual === 0 || v.stock_actual <= v.stock_minimo
+                              ? "rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700"
+                              : "rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                          }>
+                            {v.talla}: {v.stock_actual} (mín. {v.stock_minimo})
+                          </span>
+                        ))}
+                      </div>
                     )}
                     {!producto.variantes?.length && producto.talla && (
-                      <p className="text-xs text-muted-foreground">Talla: {producto.talla}</p>
+                      <p className="text-xs text-muted-foreground">Variante: {producto.talla}</p>
                     )}
                   </div>
                 </div>
@@ -206,10 +221,7 @@ export function InventarioTable({ searchTerm, filtros, refreshKey = 0, onAccion 
                 <span className="text-muted-foreground">/{producto.stock_minimo}</span>
               </TableCell>
               <TableCell className="font-semibold">
-                {new Intl.NumberFormat("es-MX", {
-                  style: "currency",
-                  currency: "MXN",
-                }).format(producto.precio_venta)}
+                {mostrarPrecio(producto)}
               </TableCell>
               <TableCell>
                 <BadgeEstado estado={producto.estado_stock} />

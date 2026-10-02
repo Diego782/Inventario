@@ -24,7 +24,7 @@ export type UseCarritoVenta = {
   agregarOIncrementar: (producto: ProductoDTO) => { excedeStock: boolean }
   agregarConVariante: (
     producto: ProductoDTO,
-    variante: { id: string; talla: string; stock_actual: number },
+    variante: { id: string; talla: string; stock_actual: number; precio_venta?: number | null },
     cantidad: number
   ) => { excedeStock: boolean }
   setCantidad: (clave: string, cantidad: number) => void
@@ -57,7 +57,7 @@ export function useCarritoVenta(
 
   const agregarVariante = (
     producto: ProductoDTO,
-    variante: { id: string; talla: string; stock_actual: number },
+    variante: { id: string; talla: string; stock_actual: number; precio_venta?: number | null },
     cantidad: number
   ): { excedeStock: boolean } => {
     const resultado = agregarConVariante(items, producto, variante, cantidad, permitir_sobreventa)

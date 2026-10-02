@@ -52,6 +52,7 @@ export function ordenarRanking<
 // negativa, por lo que el filtro robusto e independiente del tipo es `cantidad < 0`.
 import { prisma } from "@/lib/db"
 import { redondearBancario } from "@/lib/money"
+import { precioCompraEfectivo, precioEfectivo } from "@/lib/precio-variantes"
 import { limitesUtc } from "@/lib/dominio/metricas"
 import type {
   RankingsDTO,
@@ -120,14 +121,24 @@ export async function calcularRankings(
   // ── topMargin: margen unitario por producto del tenant (precio_venta − precio_compra) ──
   const productos = await prisma.producto.findMany({
     where: { organizacion_id },
-    select: { id: true, nombre: true, precio_compra: true, precio_venta: true, activo: true },
+    select: {
+      id: true, nombre: true, precio_compra: true, precio_venta: true,
+      precio_por_variante: true, activo: true,
+      variantes: { select: { precio_compra: true, precio_venta: true, stock_actual: true } },
+    },
   })
 
-  const margenItems = productos.map((p) => ({
-    producto_id: p.id,
-    nombre: p.nombre,
-    margen: redondearBancario(Number(p.precio_venta) - Number(p.precio_compra)), // R3.7 + R3.11
-  }))
+  const margenItems = productos.map((p) => {
+    let margen = Number(p.precio_venta) - Number(p.precio_compra)
+    if (p.precio_por_variante && p.variantes.length > 0) {
+      const stockTotal = p.variantes.reduce((sum, v) => sum + v.stock_actual, 0)
+      const peso = (stock: number) => stockTotal > 0 ? stock : 1
+      margen = p.variantes.reduce((sum, v) =>
+        sum + (precioEfectivo(p, v) - precioCompraEfectivo(p, v)) * peso(v.stock_actual), 0)
+        / (stockTotal || p.variantes.length)
+    }
+    return { producto_id: p.id, nombre: p.nombre, margen: redondearBancario(margen) }
+  })
   const topMargin: RankingItemMargen[] = ordenarRanking(margenItems, "margen", "desc", limite)
 
   // ── Salidas por producto en el rango, del tenant (movimientos que decrementan stock) ──

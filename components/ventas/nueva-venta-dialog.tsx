@@ -95,7 +95,7 @@ export function NuevaVentaDialog({
       const producto: ProductoDTO = await res.json()
 
       if ((producto.variantes?.length ?? 0) > 0) {
-        toast.info(`${producto.nombre} tiene tallas. Selecciona la talla abajo.`)
+        toast.info(`${producto.nombre} tiene variantes. Selecciona la variante abajo.`)
         refocusHidden()
         return
       }
@@ -222,9 +222,9 @@ export function NuevaVentaDialog({
                 onAgregarVariante={(producto, variante, cantidad) => {
                   const { excedeStock } = carrito.agregarConVariante(producto, variante, cantidad)
                   if (excedeStock) {
-                    toast.error(`Stock insuficiente para ${producto.nombre} talla ${variante.talla}`)
+                    toast.error(`Stock insuficiente para ${producto.nombre}, variante ${variante.talla}`)
                   } else {
-                    toast.success(`${producto.nombre} (talla ${variante.talla}) agregado`)
+                    toast.success(`${producto.nombre} (variante ${variante.talla}) agregado`)
                   }
                   refocusHidden()
                 }}

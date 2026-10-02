@@ -7,18 +7,20 @@ import { randomUUID } from "node:crypto"
 import { promisify } from "node:util"
 import { z } from "zod"
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
-import bwipjs from "bwip-js"
+import bwipjs from "bwip-js/node"
 import { prisma } from "@/lib/db"
 import { ok, errorNoEncontrado, errorServidor } from "@/lib/api/respuestas"
 import { mapPrismaError } from "@/lib/api/errores"
 import { withValidation } from "@/lib/api/with-validation"
 import { resolverContexto } from "@/lib/auth/contexto-request"
+import { precioEfectivo } from "@/lib/precio-variantes"
 
 const execAsync = promisify(exec)
 
 const imprimirSchema = z.object({
   cantidad: z.number().int().min(1).max(100),
   talla: z.string().max(20).optional(),
+  variante_id: z.string().uuid().optional(),
 })
 
 type Params = { params: Promise<{ id: string }> }
@@ -80,7 +82,7 @@ async function generarHtmlEtiquetas(opts: {
       : codigoBarras
         ? `<p class="codigo-texto">${codigoBarras}</p>`
         : ""
-  }<p class="precio">${precioStr}${talla ? ` <span class="talla">— Talla: ${talla}</span>` : ""}</p></div>`
+  }<p class="precio">${precioStr}${talla ? ` <span class="talla">— Variante: ${talla.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>` : ""}</p></div>`
 
   const etiquetas = Array.from({ length: cantidad }).map(() => etiquetaHtml).join("")
 
@@ -296,11 +298,25 @@ export async function POST(req: NextRequest, { params }: Params) {
       // Verificar que el producto existe y pertenece a la organización activa
       const producto = await prisma.producto.findUnique({
         where: { id, organizacion_id: ctx.organizacionActiva!.id },
+        include: { variantes: true },
       })
 
       if (!producto || !producto.activo) {
         return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
       }
+
+      const variante = input.variante_id
+        ? producto.variantes.find((v) => v.id === input.variante_id)
+        : input.talla
+          ? producto.variantes.find((v) => v.talla === input.talla)
+          : undefined
+      if ((input.variante_id || input.talla) && !variante) {
+        return errorNoEncontrado("NO_ENCONTRADO", "Variante no encontrada.")
+      }
+      if (producto.precio_por_variante && !variante) {
+        return errorNoEncontrado("PRECIO_VARIANTE_INVALIDO", "Selecciona una variante para imprimir su precio.")
+      }
+      const precio = precioEfectivo(producto, variante)
 
       const { anchoMm, altoMm } = await leerDimensionesEtiqueta(ctx.organizacionActiva!.id)
       const impresora = process.env.PRINTER_NAME?.trim()
@@ -310,11 +326,11 @@ export async function POST(req: NextRequest, { params }: Params) {
         const html = await generarHtmlEtiquetas({
           nombre: producto.nombre,
           codigoBarras: producto.codigo_barras,
-          precio: Number(producto.precio_venta),
+          precio,
           anchoMm,
           altoMm,
           cantidad: input.cantidad,
-          talla: input.talla,
+          talla: variante?.talla ?? input.talla,
         })
         return new Response(html, {
           status: 200,
@@ -326,7 +342,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       const pdfBytes = await generarPdfEtiquetas({
         nombre: producto.nombre,
         codigoBarras: producto.codigo_barras,
-        precio: Number(producto.precio_venta),
+        precio,
         anchoMm,
         altoMm,
         cantidad: input.cantidad,

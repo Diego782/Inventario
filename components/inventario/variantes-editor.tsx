@@ -26,8 +26,26 @@ interface VariantesEditorProps {
   onCambio: () => void
 }
 
+type BorradorVariante = {
+  stock_actual: string
+  stock_minimo: string
+  precio_compra: string
+  precio_venta: string
+}
+
+function borradoresDe(variantes: VarianteDTO[], precioCompraComun: number, precioVentaComun: number): Record<string, BorradorVariante> {
+  return Object.fromEntries(variantes.map((v) => [v.id, {
+    stock_actual: String(v.stock_actual),
+    stock_minimo: String(v.stock_minimo),
+    precio_compra: String(v.precio_compra ?? precioCompraComun),
+    precio_venta: String(v.precio_venta ?? precioVentaComun),
+  }]))
+}
+
 export function VariantesEditor({ productoId, variantes: variantesIniciales, stockActualComun, stockMinimoComun, precioPorVariante, precioCompraComun, precioVentaComun, onCambio }: VariantesEditorProps) {
   const [variantes, setVariantes] = useState<VarianteDTO[]>(variantesIniciales)
+  const [borradores, setBorradores] = useState<Record<string, BorradorVariante>>(() => borradoresDe(variantesIniciales, precioCompraComun, precioVentaComun))
+  const [guardando, setGuardando] = useState(false)
   const [tallasDisponibles, setTallasDisponibles] = useState<string[]>([])
   const [nuevaTalla, setNuevaTalla] = useState("")
   const [nuevoStock, setNuevoStock] = useState(variantesIniciales.length === 0 ? stockActualComun : 0)
@@ -40,11 +58,12 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, sto
   // Sincronizar si cambian las variantes provistas (p. ej. al abrir otro producto)
   useEffect(() => {
     setVariantes(variantesIniciales)
+    setBorradores(borradoresDe(variantesIniciales, precioCompraComun, precioVentaComun))
     if (variantesIniciales.length === 0) {
       setNuevoStock(stockActualComun)
       setNuevoStockMinimo(stockMinimoComun)
     }
-  }, [variantesIniciales, stockActualComun, stockMinimoComun])
+  }, [variantesIniciales, stockActualComun, stockMinimoComun, precioCompraComun, precioVentaComun])
 
   function cargarTallas() {
     fetch("/api/tallas")
@@ -59,7 +78,9 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, sto
       const res = await fetch(`/api/productos/${productoId}/variantes`)
       if (res.ok) {
         const data = await res.json()
-        setVariantes(Array.isArray(data) ? data : [])
+        const actualizadas = Array.isArray(data) ? data : []
+        setVariantes(actualizadas)
+        setBorradores(borradoresDe(actualizadas, precioCompraComun, precioVentaComun))
       }
     } catch {
       // Silencioso: se mantiene el estado previo
@@ -109,39 +130,59 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, sto
     }
   }
 
-  async function handleEditarStock(varianteId: string, stock: number) {
-    try {
-      const res = await fetch(`/api/productos/${productoId}/variantes`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variante_id: varianteId, stock_actual: stock }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        toast.error(data?.error?.mensaje ?? "Error al actualizar stock")
-        return
-      }
-      await recargarVariantes()
-    } catch {
-      toast.error("Error de conexión")
-    }
+  function editarBorrador(varianteId: string, campo: keyof BorradorVariante, valor: string) {
+    setBorradores((actual) => ({
+      ...actual,
+      [varianteId]: { ...actual[varianteId], [campo]: valor },
+    }))
   }
 
-  async function handleEditarCampo(varianteId: string, campo: "precio_compra" | "precio_venta" | "stock_minimo", valor: number) {
+  const cambios = variantes.flatMap((v) => {
+    const borrador = borradores[v.id]
+    if (!borrador) return []
+    const datos: Record<string, number | string> = { variante_id: v.id }
+    if (borrador.stock_actual !== String(v.stock_actual)) datos.stock_actual = Number(borrador.stock_actual)
+    if (borrador.stock_minimo !== String(v.stock_minimo)) datos.stock_minimo = Number(borrador.stock_minimo)
+    if (precioPorVariante) {
+      if (borrador.precio_compra !== String(v.precio_compra ?? precioCompraComun)) datos.precio_compra = Number(borrador.precio_compra)
+      if (borrador.precio_venta !== String(v.precio_venta ?? precioVentaComun)) datos.precio_venta = Number(borrador.precio_venta)
+    }
+    return Object.keys(datos).length > 1 ? [datos] : []
+  })
+
+  async function handleGuardar() {
+    if (!cambios.length) return
+    for (const cambio of cambios) {
+      for (const [campo, valor] of Object.entries(cambio)) {
+        if (campo === "variante_id") continue
+        const borrador = borradores[cambio.variante_id as string]
+        const numero = Number(valor)
+        if (!borrador?.[campo as keyof BorradorVariante] || !Number.isFinite(numero) || numero < 0 ||
+          ((campo === "stock_actual" || campo === "stock_minimo") && !Number.isInteger(numero))) {
+          toast.error("Revisa el stock y los precios antes de guardar.")
+          return
+        }
+      }
+    }
+    setGuardando(true)
     try {
-      const res = await fetch(`/api/productos/${productoId}/variantes`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variante_id: varianteId, [campo]: valor }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        toast.error(data?.error?.mensaje ?? "Error al actualizar variante")
-        return
+      for (const cambio of cambios) {
+        const res = await fetch(`/api/productos/${productoId}/variantes`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cambio),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => null)
+          throw new Error(data?.error?.mensaje ?? "Error al guardar la variante")
+        }
       }
       await recargarVariantes()
-    } catch {
-      toast.error("Error de conexión")
+      toast.success("Cambios de stock guardados")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error de conexión")
+    } finally {
+      setGuardando(false)
     }
   }
 
@@ -198,13 +239,10 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, sto
                     const actual = campo === "precio_compra" ? (v.precio_compra ?? precioCompraComun) : (v.precio_venta ?? precioVentaComun)
                     return <label key={campo} className="space-y-1 text-xs font-medium">
                       <span>{campo === "precio_compra" ? "Compra" : "Venta"}</span>
-                      <Input key={`${v.id}-${campo}-${actual}`} type="number" min="0" step="0.01"
-                        defaultValue={actual} aria-label={`${campo === "precio_compra" ? "Compra" : "Venta"} de variante ${v.talla}`}
-                        onBlur={(e) => {
-                          const precio = Number(e.target.value)
-                          if (e.target.value === "" || !Number.isFinite(precio) || precio < 0) return
-                          if (precio !== actual) handleEditarCampo(v.id, campo, precio)
-                        }} />
+                      <Input type="number" min="0" step="0.01"
+                        value={borradores[v.id]?.[campo] ?? String(actual)}
+                        aria-label={`${campo === "precio_compra" ? "Compra" : "Venta"} de variante ${v.talla}`}
+                        onChange={(e) => editarBorrador(v.id, campo, e.target.value)} />
                     </label>
                   })}
                 </div>
@@ -212,26 +250,22 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, sto
               <div className="grid grid-cols-2 gap-3">
                 <label className="space-y-1 text-xs font-medium">
                   <span>Stock actual</span>
-                  <Input key={`${v.id}-stock-${v.stock_actual}`} type="number" min="0" defaultValue={v.stock_actual}
+                  <Input type="number" min="0" value={borradores[v.id]?.stock_actual ?? String(v.stock_actual)}
                     aria-label={`Stock actual de variante ${v.talla}`}
-                    onBlur={(e) => {
-                      const val = parseInt(e.target.value) || 0
-                      if (val !== v.stock_actual) handleEditarStock(v.id, val)
-                    }} />
+                    onChange={(e) => editarBorrador(v.id, "stock_actual", e.target.value)} />
                 </label>
                 <label className="space-y-1 text-xs font-medium">
                   <span>Stock mínimo</span>
-                  <Input key={`${v.id}-min-${v.stock_minimo}`} type="number" min="0" defaultValue={v.stock_minimo}
+                  <Input type="number" min="0" value={borradores[v.id]?.stock_minimo ?? String(v.stock_minimo)}
                     aria-label={`Stock mínimo de variante ${v.talla}`}
-                    onBlur={(e) => {
-                      const minimo = Number(e.target.value)
-                      if (e.target.value === "" || !Number.isInteger(minimo) || minimo < 0) return
-                      if (minimo !== v.stock_minimo) handleEditarCampo(v.id, "stock_minimo", minimo)
-                    }} />
+                    onChange={(e) => editarBorrador(v.id, "stock_minimo", e.target.value)} />
                 </label>
               </div>
             </div>
           ))}
+          <Button type="button" onClick={handleGuardar} disabled={guardando || cambios.length === 0} className="w-full">
+            {guardando ? "Guardando..." : "Guardar cambios"}
+          </Button>
         </div>
       )}
 

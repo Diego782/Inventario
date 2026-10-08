@@ -18,7 +18,7 @@ CREATE TABLE `lotes_producto` (
   CONSTRAINT `lotes_producto_organizacion_id_fkey` FOREIGN KEY (`organizacion_id`) REFERENCES `organizaciones`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `lotes_producto_producto_id_fkey` FOREIGN KEY (`producto_id`) REFERENCES `productos`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `lotes_producto_variante_id_fkey` FOREIGN KEY (`variante_id`) REFERENCES `variantes_producto`(`id`) ON DELETE SET NULL ON UPDATE CASCADE
-);
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE TABLE `venta_item_lotes` (
   `venta_item_id` CHAR(36) NOT NULL,
@@ -28,4 +28,4 @@ CREATE TABLE `venta_item_lotes` (
   INDEX `venta_item_lotes_lote_id_idx` (`lote_id`),
   CONSTRAINT `venta_item_lotes_venta_item_id_fkey` FOREIGN KEY (`venta_item_id`) REFERENCES `venta_items`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `venta_item_lotes_lote_id_fkey` FOREIGN KEY (`lote_id`) REFERENCES `lotes_producto`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE
-);
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

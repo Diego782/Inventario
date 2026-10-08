@@ -142,7 +142,7 @@ function AppShellConPermisos() {
   const { organizacion } = useOrganizacionActiva()
 
   return (
-    <PermisosProvider organizacionId={organizacion?.id}>
+    <PermisosProvider key={organizacion?.id ?? "sin-organizacion"} organizacionId={organizacion?.id}>
       <AppShell />
     </PermisosProvider>
   )

@@ -77,6 +77,8 @@ const MENSAJES: Record<string, string> = {
   CODIGO_BARRAS_DUPLICADO: "Ese código de barras ya pertenece a otro producto.",
   CODIGO_BARRAS_INVALIDO: "El código de barras no es válido (EAN-13 o Code128).",
   STOCK_NEGATIVO: "Stock insuficiente para completar la operación.",
+  STOCK_DESACTUALIZADO: "El stock cambió mientras editabas. Abre de nuevo el ajuste.",
+  STOCK_DIRECTO_NO_DISPONIBLE: "Este producto usa variantes. Ajusta el stock de cada variante.",
   PRODUCTO_VENCIDO: "No hay suficiente stock vigente. Revisa los lotes vencidos.",
   LOTE_INVALIDO: "Revisa la fecha y la cantidad del lote.",
   USAR_AJUSTE_STOCK: "Use Ajuste de stock para modificar inventario.",

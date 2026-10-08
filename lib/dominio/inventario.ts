@@ -9,13 +9,15 @@ import {
   CodigoBarrasInvalidoError,
   ProductoNoEncontradoError,
   StockNegativoError,
+  StockDesactualizadoError,
+  StockDirectoNoDisponibleError,
   TallaInvalidaError,
   PrecioVarianteInvalidoError,
   StockMinimoVarianteInvalidoError,
   LoteInvalidoError,
   UsarAjusteStockError,
 } from "@/lib/api/errores"
-import type { CrearProductoInput, EditarProductoInput, AjusteStockInput } from "@/lib/schemas/producto"
+import type { CrearProductoInput, EditarProductoInput, AjusteStockInput, StockDirectoInput } from "@/lib/schemas/producto"
 import type { Producto, MovimientoStock } from "@prisma/client"
 import { detectarStockCritico, detectarStockCero, estadoStock } from "@/lib/dominio/notificaciones"
 import { redondearBancario } from "@/lib/money"
@@ -374,6 +376,51 @@ export async function ajustarStock(
     )
 
     return { producto: productoActualizado, movimiento }
+  })
+}
+
+/** Guarda stock y mínimo juntos para productos sin variantes, con movimiento auditable. */
+export async function establecerStockDirecto(
+  id: string,
+  input: StockDirectoInput,
+  organizacion_id: string,
+): Promise<{ producto: Producto; movimiento: MovimientoStock | null }> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM productos WHERE id = ${id} AND organizacion_id = ${organizacion_id} FOR UPDATE`
+    const anterior = await tx.producto.findFirst({ where: { id, organizacion_id, activo: true } })
+    if (!anterior) throw new ProductoNoEncontradoError()
+    if (anterior.controla_vencimiento) {
+      throw new LoteInvalidoError("Modifica el stock desde los lotes de vencimiento.")
+    }
+    if (await tx.varianteProducto.count({ where: { producto_id: id } })) {
+      throw new StockDirectoNoDisponibleError()
+    }
+    if (anterior.stock_actual !== input.stock_esperado) throw new StockDesactualizadoError()
+
+    const delta = input.stock_actual - anterior.stock_actual
+    const producto = await tx.producto.update({
+      where: { id },
+      data: { stock_actual: input.stock_actual, stock_minimo: input.stock_minimo },
+    })
+    const movimiento = delta === 0 ? null : await tx.movimientoStock.create({ data: {
+      organizacion_id,
+      producto_id: id,
+      tipo: delta > 0 ? "entrada" : "ajuste",
+      cantidad: delta,
+      stock_resultante: input.stock_actual,
+      motivo: "Ajuste manual de stock sin variantes",
+    } })
+    if (delta !== 0 || input.stock_minimo !== anterior.stock_minimo) {
+      await detectarStockCritico(tx, {
+        organizacion_id, producto_id: id, nombre: anterior.nombre,
+        stock_actual: input.stock_actual, stock_minimo: input.stock_minimo,
+      }, estadoStock(anterior.stock_actual, anterior.stock_minimo))
+      await detectarStockCero(tx, {
+        organizacion_id, producto_id: id, nombre: anterior.nombre,
+        stock_actual: input.stock_actual,
+      })
+    }
+    return { producto, movimiento }
   })
 }
 

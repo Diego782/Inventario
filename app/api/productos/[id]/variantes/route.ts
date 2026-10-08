@@ -206,7 +206,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       // Verificar que el producto pertenece a la organización activa
       const producto = await prisma.producto.findUnique({
         where: { id, organizacion_id: ctx.organizacionActiva!.id },
-        select: { id: true, controla_vencimiento: true },
+        select: { id: true, controla_vencimiento: true, precio_por_variante: true },
       })
       if (!producto) return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
 
@@ -224,8 +224,23 @@ export async function DELETE(req: NextRequest, { params }: Params) {
         return errorConflicto("LOTE_INVALIDO", 422, "Descarta o vende los lotes antes de eliminar la variante.")
       }
 
-      await prisma.varianteProducto.delete({ where: { id: input.variante_id } })
-      await actualizarStockProducto(id)
+      const cantidadVariantes = await prisma.varianteProducto.count({ where: { producto_id: id } })
+      if (cantidadVariantes === 1) {
+        // Al quitar la última variante, el producto vuelve al modo simple sin perder stock.
+        await prisma.$transaction(async (tx) => {
+          await tx.varianteProducto.delete({ where: { id: input.variante_id } })
+          await tx.producto.update({ where: { id }, data: {
+            stock_actual: variante.stock_actual,
+            stock_minimo: variante.stock_minimo,
+            precio_por_variante: false,
+            ...(producto.precio_por_variante && variante.precio_compra != null && { precio_compra: variante.precio_compra }),
+            ...(producto.precio_por_variante && variante.precio_venta != null && { precio_venta: variante.precio_venta }),
+          } })
+        })
+      } else {
+        await prisma.varianteProducto.delete({ where: { id: input.variante_id } })
+        await actualizarStockProducto(id)
+      }
 
       return ok({ eliminado: true })
     } catch (e) {

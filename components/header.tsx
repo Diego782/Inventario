@@ -1,9 +1,13 @@
 "use client"
 
-import { Menu } from "lucide-react"
+import { useState } from "react"
+import { Building2, Check, ChevronDown, Menu } from "lucide-react"
+import { toast } from "sonner"
 // import { Input } from "@/components/ui/input" // BETA: oculto junto al buscador
 import { Button } from "@/components/ui/button"
 import { CampanaNotificaciones } from "@/components/notificaciones/campana-notificaciones"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useOrganizacionActiva } from "@/hooks/use-organizacion-activa"
 
 interface HeaderProps {
   title: string
@@ -11,6 +15,22 @@ interface HeaderProps {
 }
 
 export function Header({ title, onMenuClick }: HeaderProps) {
+  const { organizacion, organizaciones, seleccionar } = useOrganizacionActiva()
+  const [cambiando, setCambiando] = useState(false)
+
+  async function cambiarOrganizacion(id: string) {
+    if (cambiando || id === organizacion?.id) return
+    setCambiando(true)
+    try {
+      await seleccionar(id)
+      // Reinicia las vistas y sus datos para que ninguna conserve la organización anterior.
+      window.location.reload()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo cambiar de organización")
+      setCambiando(false)
+    }
+  }
+
   return (
     <header className="flex items-center justify-between px-6 py-4 bg-card border-b border-border">
       <div className="flex items-center gap-4">
@@ -46,6 +66,26 @@ export function Header({ title, onMenuClick }: HeaderProps) {
         </div>
         */}
         
+        {organizacion && organizaciones.length > 1 && <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" size="sm" disabled={cambiando}
+              aria-label={`Cambiar organización. Actual: ${organizacion.nombre}`} className="min-w-0 gap-2">
+              <Building2 className="size-4 shrink-0" />
+              <span className="max-w-20 truncate sm:max-w-40">{cambiando ? "Cambiando..." : organizacion.nombre}</span>
+              <ChevronDown className="size-4 shrink-0" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuLabel>Organizaciones</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {organizaciones.map((opcion) => <DropdownMenuItem key={opcion.id}
+              disabled={cambiando || opcion.id === organizacion.id}
+              onSelect={() => void cambiarOrganizacion(opcion.id)}>
+              <span className="min-w-0 flex-1 truncate">{opcion.nombre}</span>
+              {opcion.id === organizacion.id && <Check className="size-4" />}
+            </DropdownMenuItem>)}
+          </DropdownMenuContent>
+        </DropdownMenu>}
         <CampanaNotificaciones />
       </div>
     </header>

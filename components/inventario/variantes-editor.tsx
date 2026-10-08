@@ -187,7 +187,10 @@ export function VariantesEditor({ productoId, variantes: variantesIniciales, sto
   }
 
   async function handleEliminar(varianteId: string, talla: string) {
-    if (!confirm(`¿Eliminar la variante ${talla}?`)) return
+    const mensaje = variantes.length === 1
+      ? `¿Quitar la variante ${talla}? El stock y el mínimo se conservarán en el producto sin variantes.`
+      : `¿Eliminar la variante ${talla}?`
+    if (!confirm(mensaje)) return
     try {
       const res = await fetch(`/api/productos/${productoId}/variantes`, {
         method: "DELETE",

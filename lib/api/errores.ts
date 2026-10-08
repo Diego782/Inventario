@@ -23,6 +23,14 @@ export class StockNegativoError extends Error {
   }
 }
 
+export class StockDesactualizadoError extends Error {
+  constructor() { super("STOCK_DESACTUALIZADO"); this.name = "StockDesactualizadoError" }
+}
+
+export class StockDirectoNoDisponibleError extends Error {
+  constructor() { super("STOCK_DIRECTO_NO_DISPONIBLE"); this.name = "StockDirectoNoDisponibleError" }
+}
+
 export class LoteInvalidoError extends Error {
   constructor(mensaje: string) { super(mensaje); this.name = "LoteInvalidoError" }
 }
@@ -181,6 +189,8 @@ export function mapPrismaError(e: unknown): Response {
   if (e instanceof ProductoVencidoError) return errorConflicto("PRODUCTO_VENCIDO", 422)
   if (e instanceof LoteInvalidoError) return errorConflicto("LOTE_INVALIDO", 422, e.message)
   if (e instanceof StockNegativoError) return errorPeticion("STOCK_NEGATIVO")
+  if (e instanceof StockDesactualizadoError) return errorConflicto("STOCK_DESACTUALIZADO")
+  if (e instanceof StockDirectoNoDisponibleError) return errorConflicto("STOCK_DIRECTO_NO_DISPONIBLE", 422)
   if (e instanceof UsarAjusteStockError) return errorPeticion("USAR_AJUSTE_STOCK")
   if (e instanceof CodigoBarrasInvalidoError) return errorPeticion("CODIGO_BARRAS_INVALIDO")
   if (e instanceof ProductoNoEncontradoError) return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")

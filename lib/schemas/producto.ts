@@ -170,6 +170,13 @@ export const ajusteStockSchema = z.object({
   motivo: z.string().max(240).optional(),
 })
 
+export const stockDirectoSchema = z.object({
+  stock_actual: z.number().int().nonnegative("El stock no puede ser negativo"),
+  stock_minimo: z.number().int().nonnegative("El stock mínimo no puede ser negativo"),
+  stock_esperado: z.number().int().nonnegative(),
+})
+
 export type CrearProductoInput = z.infer<typeof crearProductoSchema>
 export type EditarProductoInput = z.infer<typeof editarProductoSchema>
 export type AjusteStockInput = z.infer<typeof ajusteStockSchema>
+export type StockDirectoInput = z.infer<typeof stockDirectoSchema>

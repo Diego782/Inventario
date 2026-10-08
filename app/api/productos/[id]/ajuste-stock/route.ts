@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server"
-import { ajustarStock } from "@/lib/dominio/inventario"
+import { ajustarStock, establecerStockDirecto } from "@/lib/dominio/inventario"
 import { toProductoDTO, toMovimientoDTO } from "@/lib/api/serializadores"
-import { creado, errorPeticion } from "@/lib/api/respuestas"
+import { creado, errorPeticion, ok } from "@/lib/api/respuestas"
 import { mapPrismaError, StockNegativoError, ProductoNoEncontradoError } from "@/lib/api/errores"
 import { errorNoEncontrado } from "@/lib/api/respuestas"
 import { withValidation } from "@/lib/api/with-validation"
-import { ajusteStockSchema } from "@/lib/schemas/producto"
+import { ajusteStockSchema, stockDirectoSchema } from "@/lib/schemas/producto"
 import { resolverContexto } from "@/lib/auth/contexto-request"
 
 type Params = { params: Promise<{ id: string }> }
@@ -28,6 +28,20 @@ export async function POST(req: NextRequest, { params }: Params) {
       if (e instanceof StockNegativoError) return errorPeticion("STOCK_NEGATIVO")
       if (e instanceof ProductoNoEncontradoError) return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
       return mapPrismaError(e)
+    }
+  })
+}
+
+export async function PUT(req: NextRequest, { params }: Params) {
+  const resultado = await resolverContexto({ seccion: "inventario", accion: "editar" })
+  if (resultado.error) return resultado.error
+  const { id } = await params
+  return withValidation(stockDirectoSchema, req, async (input) => {
+    try {
+      const { producto, movimiento } = await establecerStockDirecto(id, input, resultado.ctx.organizacionActiva!.id)
+      return ok({ producto: toProductoDTO(producto), movimiento: movimiento ? toMovimientoDTO(movimiento) : null })
+    } catch (error) {
+      return mapPrismaError(error)
     }
   })
 }

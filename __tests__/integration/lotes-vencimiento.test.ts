@@ -13,10 +13,11 @@ describe.skipIf(!process.env.DATABASE_URL)("lotes de vencimiento y venta FEFO", 
     const { crearProducto, editarProducto } = await import("@/lib/dominio/inventario")
     const { registrarVenta, eliminarVenta } = await import("@/lib/dominio/ventas")
     const { ProductoVencidoError } = await import("@/lib/api/errores")
-    const usuario = await prisma.usuario.findFirst({ select: { id: true } })
-    if (!usuario) throw new Error("Se necesita un usuario en la base de pruebas")
-
     const sufijo = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    const usuario = await prisma.usuario.create({ data: {
+      correo: `prueba-lotes-${sufijo}@example.invalid`, nombre: "Prueba lotes",
+      hash_contrasena: "sin-acceso", correo_verificado: true, estado: "activo",
+    } })
     const org = await prisma.organizacion.create({ data: {
       nombre: "Prueba vencimiento", slug: `prueba-lotes-${sufijo}`, creado_por: usuario.id,
     } })
@@ -73,6 +74,7 @@ describe.skipIf(!process.env.DATABASE_URL)("lotes de vencimiento y venta FEFO", 
       await prisma.producto.deleteMany({ where: { id: { in: productos } } })
       await prisma.configuracion.deleteMany({ where: { organizacion_id: org.id } })
       await prisma.organizacion.delete({ where: { id: org.id } })
+      await prisma.usuario.delete({ where: { id: usuario.id } })
     }
   })
 })

@@ -11,6 +11,7 @@
 import type { Prisma } from "@prisma/client"
 import type { NotificacionDTO } from "@/lib/api/serializadores"
 import { prisma } from "@/lib/db"
+import { formatInTimeZone } from "date-fns-tz"
 import { PlazoExtensionInvalidoError } from "@/lib/api/errores"
 import { saldoCliente } from "@/lib/dominio/deuda"
 
@@ -36,6 +37,55 @@ export function claveDedupStockCero(productoId: string): string {
 // Formato exacto de la clave de deduplicación de vencimiento de deuda (Req 8.11).
 export function claveDedupVencimientoDeuda(ventaId: string): string {
   return `vencimiento_deuda:${ventaId}`
+}
+
+/** Al cambiar una fecha o agotar un lote, retira alertas que ya no describen su estado. */
+export async function cerrarAlertasDeLote(tx: Prisma.TransactionClient, loteId: string): Promise<void> {
+  await tx.notificacion.updateMany({
+    where: { OR: [
+      { clave_deduplicacion: { startsWith: `lote_por_vencer:${loteId}:` } },
+      { clave_deduplicacion: { startsWith: `lote_vencido:${loteId}:` } },
+    ] },
+    data: { leida: true, clave_deduplicacion: null },
+  })
+}
+
+/** Evalúa lotes con stock hasta 30 días antes de su vencimiento, por organización. */
+export async function generarNotificacionesVencimientoProducto(organizacionId: string): Promise<void> {
+  const hoy = formatInTimeZone(new Date(), process.env.TZ ?? "America/Mexico_City", "yyyy-MM-dd")
+  const limite = new Date(`${hoy}T00:00:00.000Z`)
+  limite.setUTCDate(limite.getUTCDate() + 30)
+  const lotes = await prisma.loteProducto.findMany({
+    where: {
+      organizacion_id: organizacionId, stock_actual: { gt: 0 }, fecha_vencimiento: { lte: limite },
+      producto: { activo: true, controla_vencimiento: true },
+    },
+    include: { producto: { select: { nombre: true } }, variante: { select: { talla: true } } },
+  })
+  for (const lote of lotes) {
+    const dia = lote.fecha_vencimiento.toISOString().slice(0, 10)
+    const vencido = dia < hoy
+    if (vencido) {
+      await prisma.notificacion.updateMany({
+        where: { clave_deduplicacion: { startsWith: `lote_por_vencer:${lote.id}:` } },
+        data: { leida: true, clave_deduplicacion: null },
+      })
+    }
+    const tipo = vencido ? "lote_vencido" : "lote_por_vencer"
+    const clave = `${tipo}:${lote.id}:${dia}`
+    const existente = await prisma.notificacion.findUnique({ where: { clave_deduplicacion: clave }, select: { id: true } })
+    if (existente) continue
+    try {
+      await prisma.notificacion.create({ data: {
+        organizacion_id: organizacionId, producto_id: lote.producto_id,
+        tipo, clave_deduplicacion: clave, leida: false,
+        titulo: vencido ? "Producto vencido" : "Producto próximo a vencer",
+        mensaje: `${lote.producto.nombre}${lote.variante ? ` (${lote.variante.talla})` : ""}: ${lote.stock_actual} unidades, vence el ${dia}.`,
+      } })
+    } catch (error: any) {
+      if (error?.code !== "P2002") throw error
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

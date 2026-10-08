@@ -72,6 +72,13 @@ export async function POST(req: NextRequest, { params }: Params) {
         return errorConflicto("PRECIO_VARIANTE_INVALIDO", 422)
       }
       const variantesExistentes = await prisma.varianteProducto.count({ where: { producto_id: id } })
+      if (producto.controla_vencimiento && variantesExistentes > 0 && (input.stock_actual ?? 0) > 0) {
+        return errorConflicto("LOTE_INVALIDO", 422, "Crea la variante sin stock y registra la entrada con fecha de vencimiento.")
+      }
+      if (producto.controla_vencimiento && variantesExistentes === 0 &&
+          input.stock_actual !== undefined && input.stock_actual !== producto.stock_actual) {
+        return errorConflicto("LOTE_INVALIDO", 422, "La primera variante debe conservar el stock actual del producto.")
+      }
 
       const variante = await prisma.varianteProducto.create({
         data: {
@@ -84,6 +91,10 @@ export async function POST(req: NextRequest, { params }: Params) {
           precio_venta: producto.precio_por_variante ? input.precio_venta : null,
         },
       })
+
+      if (producto.controla_vencimiento && variantesExistentes === 0) {
+        await prisma.loteProducto.updateMany({ where: { producto_id: id, variante_id: null }, data: { variante_id: variante.id } })
+      }
 
       // Actualizar stock_actual del producto (suma de variantes)
       await actualizarStockProducto(id)
@@ -129,7 +140,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       // Verificar que el producto pertenece a la organización activa
       const producto = await prisma.producto.findUnique({
         where: { id, organizacion_id: ctx.organizacionActiva!.id },
-        select: { id: true, precio_por_variante: true },
+        select: { id: true, precio_por_variante: true, controla_vencimiento: true },
       })
       if (!producto) return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
 
@@ -141,6 +152,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
       }
       if (producto.precio_por_variante && (input.precio_compra === null || input.precio_venta === null)) {
         return errorConflicto("PRECIO_VARIANTE_INVALIDO", 422)
+      }
+      if (producto.controla_vencimiento && input.stock_actual !== undefined && input.stock_actual !== variante.stock_actual) {
+        return errorConflicto("LOTE_INVALIDO", 422, "Modifica el stock desde los lotes de vencimiento.")
       }
 
       const updated = await prisma.varianteProducto.update({
@@ -192,7 +206,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       // Verificar que el producto pertenece a la organización activa
       const producto = await prisma.producto.findUnique({
         where: { id, organizacion_id: ctx.organizacionActiva!.id },
-        select: { id: true },
+        select: { id: true, controla_vencimiento: true },
       })
       if (!producto) return errorNoEncontrado("PRODUCTO_NO_ENCONTRADO")
 
@@ -201,6 +215,13 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       })
       if (!variante || variante.producto_id !== id) {
         return errorNoEncontrado("NO_ENCONTRADO", "Variante no encontrada.")
+      }
+      if (producto.controla_vencimiento && variante.stock_actual > 0) {
+        return errorConflicto("LOTE_INVALIDO", 422, "Agota o descarta el stock antes de eliminar la variante.")
+      }
+      const lotesConStock = await prisma.loteProducto.count({ where: { variante_id: variante.id, stock_actual: { gt: 0 } } })
+      if (lotesConStock) {
+        return errorConflicto("LOTE_INVALIDO", 422, "Descarta o vende los lotes antes de eliminar la variante.")
       }
 
       await prisma.varianteProducto.delete({ where: { id: input.variante_id } })

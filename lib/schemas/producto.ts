@@ -8,6 +8,20 @@ export const varianteStockSchema = z.object({
   precio_venta: z.number().finite().nonnegative("El precio no puede ser negativo").nullable().optional(),
 })
 
+export const fechaVencimientoSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Usa una fecha válida (AAAA-MM-DD)")
+  .refine((valor) => {
+    const fecha = new Date(`${valor}T00:00:00.000Z`)
+    return !Number.isNaN(fecha.getTime()) && fecha.toISOString().slice(0, 10) === valor
+  }, "La fecha de vencimiento no existe")
+
+const loteBaseSchema = z.object({
+  fecha_vencimiento: fechaVencimientoSchema,
+  cantidad: z.number().int().positive("La cantidad del lote debe ser positiva"),
+})
+
+export const loteInicialSchema = loteBaseSchema.extend({ talla: z.string().min(1).max(20).nullable().optional() })
+export const loteAsignacionSchema = loteBaseSchema.extend({ variante_id: z.string().uuid().nullable().optional() })
+
 /** Límite máximo para los filtros de rango de stock (Req 10.2, 10.7). */
 const STOCK_MAX_PERMITIDO = 999_999_999
 
@@ -84,6 +98,7 @@ const productoBaseSchema = z.object({
   precio_compra: z.number().nonnegative("El precio de compra no puede ser negativo").default(0),
   precio_venta: z.number().nonnegative("El precio de venta no puede ser negativo"),
   precio_por_variante: z.boolean().optional(),
+  controla_vencimiento: z.boolean().optional(),
   // stock_actual se ignora cuando variantes_stock tiene entradas; se usa solo para productos sin tallas
   stock_actual: z.number().int().nonnegative("El stock no puede ser negativo").default(0),
   stock_minimo: z.number().int().nonnegative("El stock mínimo no puede ser negativo").default(0),
@@ -91,25 +106,48 @@ const productoBaseSchema = z.object({
   talla: z.string().max(20).optional().nullable(),
   // Stock por talla al crear un producto con variantes
   variantes_stock: z.array(varianteStockSchema).optional().nullable(),
+  lotes_iniciales: z.array(loteInicialSchema).optional(),
 })
 
 export const crearProductoSchema = productoBaseSchema.superRefine((valor, ctx) => {
-  if (!valor.precio_por_variante) return
-  if (!valor.variantes_stock?.length) {
-    ctx.addIssue({ code: "custom", path: ["variantes_stock"], message: "Selecciona al menos una variante." })
+  if (valor.precio_por_variante) {
+    if (!valor.variantes_stock?.length) {
+      ctx.addIssue({ code: "custom", path: ["variantes_stock"], message: "Selecciona al menos una variante." })
+    }
+    valor.variantes_stock?.forEach((variante, index) => {
+      if (variante.precio_compra === null || variante.precio_compra === undefined) {
+        ctx.addIssue({ code: "custom", path: ["variantes_stock", index, "precio_compra"], message: "Indica el precio de compra de esta variante." })
+      }
+      if (variante.precio_venta === null || variante.precio_venta === undefined) {
+        ctx.addIssue({ code: "custom", path: ["variantes_stock", index, "precio_venta"], message: "Indica el precio de venta de esta variante." })
+      }
+    })
   }
-  valor.variantes_stock?.forEach((variante, index) => {
-    if (variante.precio_compra === null || variante.precio_compra === undefined) {
-      ctx.addIssue({ code: "custom", path: ["variantes_stock", index, "precio_compra"], message: "Indica el precio de compra de esta variante." })
+  if (valor.controla_vencimiento) {
+    const variantes = valor.variantes_stock ?? []
+    if (variantes.length) {
+      for (const variante of variantes) {
+        const asignado = (valor.lotes_iniciales ?? [])
+          .filter((lote) => lote.talla === variante.talla)
+          .reduce((suma, lote) => suma + lote.cantidad, 0)
+        if (asignado !== variante.stock) {
+          ctx.addIssue({ code: "custom", path: ["lotes_iniciales"], message: `Asigna una fecha a las ${variante.stock} unidades de ${variante.talla}.` })
+        }
+      }
+      if ((valor.lotes_iniciales ?? []).some((lote) => !variantes.some((v) => v.talla === lote.talla))) {
+        ctx.addIssue({ code: "custom", path: ["lotes_iniciales"], message: "Hay un lote sin variante válida." })
+      }
+    } else {
+      const asignado = (valor.lotes_iniciales ?? []).reduce((suma, lote) => suma + lote.cantidad, 0)
+      if (asignado !== valor.stock_actual || (valor.lotes_iniciales ?? []).some((lote) => lote.talla)) {
+        ctx.addIssue({ code: "custom", path: ["lotes_iniciales"], message: "Asigna una fecha a todo el stock inicial." })
+      }
     }
-    if (variante.precio_venta === null || variante.precio_venta === undefined) {
-      ctx.addIssue({ code: "custom", path: ["variantes_stock", index, "precio_venta"], message: "Indica el precio de venta de esta variante." })
-    }
-  })
+  }
 })
 
 export const editarProductoSchema = productoBaseSchema
-  .omit({ stock_actual: true, variantes_stock: true })
+  .omit({ stock_actual: true, variantes_stock: true, lotes_iniciales: true })
   .partial()
   .extend({
   precios_variantes: z.array(z.object({
@@ -121,6 +159,7 @@ export const editarProductoSchema = productoBaseSchema
     variante_id: z.string().uuid(),
     stock_minimo: z.number().int().nonnegative("El stock mínimo no puede ser negativo"),
   })).optional(),
+  lotes_asignacion: z.array(loteAsignacionSchema).optional(),
 })
 
 export const ajusteStockSchema = z.object({

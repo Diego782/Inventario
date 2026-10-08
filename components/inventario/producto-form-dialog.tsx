@@ -43,7 +43,7 @@ import type { z } from "zod"
 
 type CrearInput = z.infer<typeof crearProductoSchema>
 type EditarInput = z.infer<typeof editarProductoSchema>
-type FormInput = CrearInput & Pick<EditarInput, "precios_variantes" | "minimos_variantes">
+type FormInput = CrearInput & Pick<EditarInput, "precios_variantes" | "minimos_variantes" | "lotes_asignacion">
 
 interface ProductoFormDialogProps {
   open: boolean
@@ -54,6 +54,11 @@ interface ProductoFormDialogProps {
 }
 
 type Categoria = { id: string; nombre: string }
+type LoteBorrador = { id: string; scope: string; fecha: string; cantidad: string }
+type StockSinFecha = { variante_id: string | null; variante: string | null; cantidad: number }
+const nuevoLote = (scope: string, cantidad = 0): LoteBorrador => ({
+  id: crypto.randomUUID(), scope, fecha: "", cantidad: String(cantidad),
+})
 
 export function ProductoFormDialog({
   open,
@@ -71,6 +76,9 @@ export function ProductoFormDialog({
   const [gestionarTallas, setGestionarTallas] = useState(false)
   // Tallas seleccionadas para el stock por talla (solo en modo crear)
   const [tallasSeleccionadas, setTallasSeleccionadas] = useState<string[]>([])
+  const [lotesFormulario, setLotesFormulario] = useState<LoteBorrador[]>([])
+  const [stockSinFecha, setStockSinFecha] = useState<StockSinFecha[]>([])
+  const [lotesActivos, setLotesActivos] = useState(0)
 
   const schema = modo === "crear" ? crearProductoSchema : editarProductoSchema
   const form = useForm<FormInput>({
@@ -82,6 +90,7 @@ export function ProductoFormDialog({
       precio_compra: 0,
       precio_venta: 0,
       precio_por_variante: false,
+      controla_vencimiento: false,
       stock_actual: 0,
       stock_minimo: 0,
       unidad: "unidad",
@@ -89,9 +98,11 @@ export function ProductoFormDialog({
       variantes_stock: [],
       precios_variantes: [],
       minimos_variantes: [],
+      lotes_iniciales: [],
+      lotes_asignacion: [],
     },
   })
-  const { reset } = form
+  const { reset, setValue } = form
 
   // useFieldArray para manejar el stock por talla dinámicamente
   const { fields: variantesFields, replace: replaceVariantes } = useFieldArray({
@@ -120,6 +131,9 @@ export function ProductoFormDialog({
   // Precargar valores en modo editar
   useEffect(() => {
     if (modo === "editar" && producto) {
+      setLotesFormulario([])
+      setStockSinFecha([])
+      setLotesActivos(0)
       reset({
         nombre: producto.nombre,
         codigo_barras: producto.codigo_barras ?? "",
@@ -127,6 +141,7 @@ export function ProductoFormDialog({
         precio_compra: producto.precio_compra,
         precio_venta: producto.precio_venta,
         precio_por_variante: producto.precio_por_variante ?? false,
+        controla_vencimiento: producto.controla_vencimiento ?? false,
         precios_variantes: producto.variantes.map((v) => ({
           variante_id: v.id,
           precio_compra: v.precio_compra ?? producto.precio_compra,
@@ -136,12 +151,16 @@ export function ProductoFormDialog({
           variante_id: v.id,
           stock_minimo: v.stock_minimo,
         })),
+        lotes_asignacion: [],
         stock_minimo: producto.stock_minimo,
         unidad: producto.unidad,
         talla: producto.talla ?? null,
       })
     } else if (modo === "crear") {
       setTallasSeleccionadas([])
+      setLotesFormulario([])
+      setStockSinFecha([])
+      setLotesActivos(0)
       reset({
         nombre: "",
         codigo_barras: "",
@@ -149,6 +168,7 @@ export function ProductoFormDialog({
         precio_compra: 0,
         precio_venta: 0,
         precio_por_variante: false,
+        controla_vencimiento: false,
         stock_actual: 0,
         stock_minimo: 0,
         unidad: "unidad",
@@ -156,9 +176,44 @@ export function ProductoFormDialog({
         variantes_stock: [],
         precios_variantes: [],
         minimos_variantes: [],
+        lotes_iniciales: [],
+        lotes_asignacion: [],
       })
     }
   }, [modo, producto, reset, open])
+
+  useEffect(() => {
+    if (!open || modo !== "editar" || !producto) return
+    const controlador = new AbortController()
+    fetch(`/api/productos/${producto.id}/lotes`, { signal: controlador.signal })
+      .then((respuesta) => respuesta.ok ? respuesta.json() : Promise.reject())
+      .then((datos) => {
+        if (controlador.signal.aborted) return
+        const sinFecha = (datos.sin_fecha ?? []) as StockSinFecha[]
+        setStockSinFecha(sinFecha)
+        setLotesActivos((datos.lotes ?? []).filter((l: { stock_actual: number }) => l.stock_actual > 0).length)
+        if (producto.controla_vencimiento) {
+          setLotesFormulario(sinFecha.filter((s) => s.cantidad > 0).map((s) => nuevoLote(s.variante_id ?? "__producto__", s.cantidad)))
+        }
+      })
+      .catch(() => {})
+    return () => controlador.abort()
+  }, [open, modo, producto?.id, producto?.controla_vencimiento])
+
+  useEffect(() => {
+    const filas = lotesFormulario.filter((lote) => Number(lote.cantidad) > 0)
+    if (modo === "crear") {
+      setValue("lotes_iniciales", filas.map((lote) => ({
+        talla: lote.scope === "__producto__" ? null : lote.scope,
+        fecha_vencimiento: lote.fecha, cantidad: Number(lote.cantidad),
+      })))
+    } else {
+      setValue("lotes_asignacion", filas.map((lote) => ({
+        variante_id: lote.scope === "__producto__" ? null : lote.scope,
+        fecha_vencimiento: lote.fecha, cantidad: Number(lote.cantidad),
+      })))
+    }
+  }, [lotesFormulario, modo, setValue])
 
   // Cargar categorías
   function cargarCategorias() {
@@ -206,6 +261,24 @@ export function ProductoFormDialog({
 
       // Si no hay variantes seleccionadas, no enviar el campo
       const payload = { ...values }
+      if (payload.controla_vencimiento) {
+        const lotes = lotesFormulario.filter((lote) => lote.cantidad !== "" && Number(lote.cantidad) > 0)
+        if (lotes.some((lote) => !/^\d{4}-\d{2}-\d{2}$/.test(lote.fecha) || !Number.isInteger(Number(lote.cantidad)))) {
+          toast.error("Revisa la fecha y la cantidad de cada lote.")
+          return
+        }
+        if (modo === "crear") {
+          ;(payload as any).lotes_iniciales = lotes.map((lote) => ({
+            talla: lote.scope === "__producto__" ? null : lote.scope,
+            fecha_vencimiento: lote.fecha, cantidad: Number(lote.cantidad),
+          }))
+        } else {
+          ;(payload as any).lotes_asignacion = lotes.map((lote) => ({
+            variante_id: lote.scope === "__producto__" ? null : lote.scope,
+            fecha_vencimiento: lote.fecha, cantidad: Number(lote.cantidad),
+          }))
+        }
+      }
       if (modo === "crear" && payload.precio_por_variante) {
         payload.precio_compra = Math.min(...(payload.variantes_stock ?? []).map((v) => v.precio_compra ?? Infinity))
         payload.precio_venta = Math.min(...(payload.variantes_stock ?? []).map((v) => v.precio_venta ?? Infinity))
@@ -213,6 +286,7 @@ export function ProductoFormDialog({
       if (modo === "crear") delete payload.precios_variantes
       if (modo === "crear") delete payload.minimos_variantes
       if (modo === "editar") delete payload.variantes_stock
+      if (modo === "editar" && !producto?.variantes.length) delete payload.minimos_variantes
       if (!payload.precio_por_variante) delete payload.precios_variantes
       if (!payload.variantes_stock || payload.variantes_stock.length === 0) {
         delete (payload as any).variantes_stock
@@ -250,6 +324,30 @@ export function ProductoFormDialog({
   const usandoVariantes = modo === "crear" && tallasSeleccionadas.length > 0
   const tieneVariantes = usandoVariantes || (modo === "editar" && (producto?.variantes.length ?? 0) > 0)
   const precioPorVariante = !!form.watch("precio_por_variante") && tieneVariantes
+  const controlaVencimiento = !!form.watch("controla_vencimiento")
+  const opcionesLote = modo === "crear"
+    ? tallasSeleccionadas.map((talla) => ({ valor: talla, etiqueta: talla }))
+    : (producto?.variantes ?? []).map((variante) => ({ valor: variante.id, etiqueta: variante.talla }))
+
+  function cambiarVencimiento(activado: boolean) {
+    if (!activado && lotesActivos > 0) {
+      toast.error("Descarta o vende los lotes con stock antes de desactivar el vencimiento.")
+      return
+    }
+    form.setValue("controla_vencimiento", activado)
+    if (!activado) { setLotesFormulario([]); return }
+    if (modo === "crear") {
+      const variantes = form.getValues("variantes_stock") ?? []
+      setLotesFormulario(variantes.length
+        ? variantes.filter((v) => v.stock > 0).map((v) => nuevoLote(v.talla, v.stock))
+        : form.getValues("stock_actual") > 0 ? [nuevoLote("__producto__", form.getValues("stock_actual"))] : [])
+    } else {
+      const sinFecha = stockSinFecha.length ? stockSinFecha
+        : producto?.variantes.length ? producto.variantes.map((v) => ({ variante_id: v.id, cantidad: v.stock_actual }))
+          : [{ variante_id: null, cantidad: producto?.stock_actual ?? 0 }]
+      setLotesFormulario(sinFecha.filter((s) => s.cantidad > 0).map((s) => nuevoLote(s.variante_id ?? "__producto__", s.cantidad)))
+    }
+  }
 
   function cambiarModoPrecio(activado: boolean) {
     const compraComun = form.getValues("precio_compra") ?? 0
@@ -292,7 +390,7 @@ export function ProductoFormDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit, () => toast.error("Revisa los campos marcados antes de guardar."))} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -677,6 +775,52 @@ export function ProductoFormDialog({
                 )} />
               )}
             </div>
+
+            <section className="space-y-3 rounded-xl border p-4" aria-label="Fechas de vencimiento">
+              <div className="flex items-center gap-2">
+                <Switch id="controla-vencimiento" checked={controlaVencimiento} onCheckedChange={cambiarVencimiento} />
+                <label htmlFor="controla-vencimiento" className="text-sm font-medium cursor-pointer">Tiene fecha de vencimiento</label>
+                <Tooltip>
+                  <TooltipTrigger asChild><button type="button" aria-label="Ayuda sobre vencimientos" className="text-muted-foreground"><CircleHelp className="size-4" /></button></TooltipTrigger>
+                  <TooltipContent className="max-w-64">Puedes registrar varias fechas y cantidades por producto o variante. Las ventas toman primero los lotes próximos a vencer y bloquean los vencidos.</TooltipContent>
+                </Tooltip>
+              </div>
+              {controlaVencimiento && <>
+                <p className="text-xs text-muted-foreground">
+                  {modo === "crear"
+                    ? "Asigna una fecha a todo el stock inicial. Añade más filas si hay varias fechas."
+                    : "Asigna fechas al stock que aún no las tiene. Los lotes existentes se administran en Ajustar stock."}
+                </p>
+                {modo === "editar" && <p className="text-xs text-muted-foreground">
+                  Sin fecha: {stockSinFecha.map((s) => `${s.variante ?? "Producto"}: ${s.cantidad}`).join(" · ") || "0"}
+                </p>}
+                <div className="space-y-2">
+                  {lotesFormulario.map((lote) => <div key={lote.id} className="grid items-end gap-2 rounded-md bg-muted/30 p-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
+                    {opcionesLote.length > 0 ? <label className="space-y-1 text-xs font-medium">
+                      <span>Variante</span>
+                      <Select value={lote.scope} onValueChange={(scope) => setLotesFormulario((actual) => actual.map((fila) => fila.id === lote.id ? { ...fila, scope } : fila))}>
+                        <SelectTrigger><SelectValue placeholder="Variante" /></SelectTrigger>
+                        <SelectContent>{opcionesLote.map((opcion) => <SelectItem key={opcion.valor} value={opcion.valor}>{opcion.etiqueta}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </label> : <span className="text-xs font-medium">Producto</span>}
+                    <label className="space-y-1 text-xs font-medium"><span>Vence el</span>
+                      <Input type="date" aria-label="Fecha de vencimiento" value={lote.fecha}
+                        onChange={(evento) => setLotesFormulario((actual) => actual.map((fila) => fila.id === lote.id ? { ...fila, fecha: evento.target.value } : fila))} />
+                    </label>
+                    <label className="space-y-1 text-xs font-medium"><span>Cantidad</span>
+                      <Input type="number" min="1" aria-label="Cantidad del lote" value={lote.cantidad}
+                        onChange={(evento) => setLotesFormulario((actual) => actual.map((fila) => fila.id === lote.id ? { ...fila, cantidad: evento.target.value } : fila))} />
+                    </label>
+                    <Button type="button" variant="ghost" size="icon" aria-label="Quitar fecha" onClick={() => setLotesFormulario((actual) => actual.filter((fila) => fila.id !== lote.id))}><X className="size-4" /></Button>
+                  </div>)}
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={() => setLotesFormulario((actual) => [...actual, nuevoLote(opcionesLote[0]?.valor ?? "__producto__")])}>
+                  <Plus className="mr-1 size-4" /> Añadir otra fecha
+                </Button>
+                {form.formState.errors.lotes_iniciales?.message && <p role="alert" className="text-sm text-destructive">{form.formState.errors.lotes_iniciales.message}</p>}
+                {form.formState.errors.lotes_asignacion?.message && <p role="alert" className="text-sm text-destructive">{form.formState.errors.lotes_asignacion.message}</p>}
+              </>}
+            </section>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={guardando}>

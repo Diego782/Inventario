@@ -39,6 +39,7 @@ export type ProductoDTO = {
   precio_compra: number
   precio_venta: number
   precio_por_variante?: boolean
+  controla_vencimiento?: boolean
   stock_actual: number
   stock_minimo: number
   unidad: string
@@ -183,6 +184,7 @@ export function toProductoDTO(p: PProducto & { variantes?: PVariante[] }): Produ
     precio_compra: redondearBancario(Number(p.precio_compra)),
     precio_venta: redondearBancario(Number(p.precio_venta)),
     precio_por_variante: p.precio_por_variante,
+    controla_vencimiento: p.controla_vencimiento,
     stock_actual: stockTotal,
     stock_minimo: p.stock_minimo,
     unidad: p.unidad,
@@ -400,6 +402,8 @@ const ACCIONES_POR_TIPO: Record<string, AccionRapida[]> = {
   stock_cero: ["Ajustar stock", "Eliminar producto"],
   stock_critico: ["Ajustar stock"],
   vencimiento_deuda: ["Extender deuda"],
+  lote_por_vencer: ["Ajustar stock"],
+  lote_vencido: ["Ajustar stock"],
 }
 
 /**

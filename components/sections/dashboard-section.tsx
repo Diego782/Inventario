@@ -15,9 +15,8 @@ import { EstadoVacio } from "@/components/dashboard/estado-vacio"
 import { KpiGrid } from "@/components/dashboard/kpi-grid"
 import { GraficaTendencia } from "@/components/dashboard/grafica-tendencia"
 import { GraficaVentasGastos } from "@/components/dashboard/grafica-ventas-gastos"
-import { GraficaTopSelling } from "@/components/dashboard/grafica-top-selling"
 import { VisualTopMargin } from "@/components/dashboard/visual-top-margin"
-import { ListaRotacion } from "@/components/dashboard/lista-rotacion"
+import { TablasFlujoProductos } from "@/components/dashboard/tablas-flujo-productos"
 
 export function DashboardSection() {
   const rangoFechas = useRangoFechas()
@@ -49,19 +48,14 @@ export function DashboardSection() {
             <GraficaVentasGastos series={metricas.series} />
           </div>
 
-          {/* Rankings: más vendidos y mayor margen (R5.4, R5.5) */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <GraficaTopSelling topSelling={rankings.topSelling} />
+          <div className="grid grid-cols-1 gap-6">
             <VisualTopMargin topMargin={rankings.topMargin} />
           </div>
 
-          {/* Rankings de rotación: mayor y menor (R5.6, R5.7) */}
-          <ListaRotacion
-            topRotation={rankings.topRotation}
-            lowRotation={rankings.lowRotation}
-          />
         </>
       )}
+      {(estado === "listo" || estado === "vacio") &&
+        <TablasFlujoProductos desde={rangoFechas.rango.desde} hasta={rangoFechas.rango.hasta} />}
     </div>
   )
 }

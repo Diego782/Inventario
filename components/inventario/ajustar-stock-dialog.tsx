@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { VariantesEditor } from "@/components/inventario/variantes-editor"
+import { LotesEditor } from "@/components/inventario/lotes-editor"
 import type { ProductoDTO } from "@/lib/api/serializadores"
 
 interface AjustarStockDialogProps {
@@ -29,7 +30,7 @@ export function AjustarStockDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Ajustar Stock</DialogTitle>
           <p className="text-sm text-muted-foreground">
@@ -38,7 +39,7 @@ export function AjustarStockDialog({
           </p>
         </DialogHeader>
 
-        <VariantesEditor
+        {producto.controla_vencimiento ? <LotesEditor producto={producto} onCambio={onAjustado} /> : <VariantesEditor
           productoId={producto.id}
           variantes={producto.variantes ?? []}
           stockActualComun={producto.stock_actual}
@@ -47,7 +48,7 @@ export function AjustarStockDialog({
           precioCompraComun={producto.precio_compra}
           precioVentaComun={producto.precio_venta}
           onCambio={onAjustado}
-        />
+        />}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

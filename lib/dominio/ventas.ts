@@ -20,6 +20,7 @@ import {
   DescuentoInvalidoError,
   PrecioDesactualizadoError,
   PrecioVarianteInvalidoError,
+  ProductoVencidoError,
 } from "@/lib/api/errores"
 import { detectarStockCritico, detectarStockCero, estadoStock } from "@/lib/dominio/notificaciones"
 import { calcularTotalesVenta } from "@/lib/dominio/descuentos"
@@ -29,6 +30,7 @@ import type { ConfiguracionMap } from "@/lib/schemas/configuracion"
 import type { CrearVentaInput } from "@/lib/schemas/venta"
 import type { Venta, VentaItem } from "@prisma/client"
 import { precioEfectivo } from "@/lib/precio-variantes"
+import { consumirLotesVenta, restaurarLotesVenta } from "@/lib/dominio/lotes"
 
 // ---- Tipos ----
 
@@ -264,6 +266,18 @@ export async function registrarVenta(
           })
           itemsCreados.push(ventaItem)
 
+          if (producto.controla_vencimiento) {
+            await consumirLotesVenta(tx, {
+              producto_id: item.producto_id,
+              variante_id: item.variante_id ?? null,
+              cantidad: item.cantidad,
+              stock_disponible: item.variante_id
+                ? (varianteMap.get(item.variante_id) as any).stock_actual
+                : producto.stock_actual,
+              venta_item_id: ventaItem.id,
+            })
+          }
+
           // Estado de stock previo del PRODUCTO (suma de variantes o stock directo),
           // capturado ANTES del update para detectar transición a Crítico (R7.1, R7.6).
           const estadoPrevio = estadoStock(producto.stock_actual, producto.stock_minimo)
@@ -366,6 +380,7 @@ export async function registrarVenta(
       e instanceof DescuentoInvalidoError
       || e instanceof PrecioDesactualizadoError
       || e instanceof PrecioVarianteInvalidoError
+      || e instanceof ProductoVencidoError
     ) {
       throw e
     }
@@ -516,6 +531,7 @@ export async function eliminarVenta(id: string, organizacion_id: string): Promis
 
     // Revertir stock de cada ítem
     for (const item of venta.items) {
+      await restaurarLotesVenta(tx, item.id)
       // Si el ítem se vendió contra una variante, devolver el stock a la variante
       if (item.variante_id) {
         const variante = await tx.varianteProducto.findFirst({

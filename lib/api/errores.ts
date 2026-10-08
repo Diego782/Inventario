@@ -23,6 +23,14 @@ export class StockNegativoError extends Error {
   }
 }
 
+export class LoteInvalidoError extends Error {
+  constructor(mensaje: string) { super(mensaje); this.name = "LoteInvalidoError" }
+}
+
+export class ProductoVencidoError extends Error {
+  constructor() { super("PRODUCTO_VENCIDO"); this.name = "ProductoVencidoError" }
+}
+
 export class UsarAjusteStockError extends Error {
   constructor() {
     super("USAR_AJUSTE_STOCK")
@@ -170,6 +178,8 @@ export class PlazoExtensionInvalidoError extends Error {
  */
 export function mapPrismaError(e: unknown): Response {
   // Errores de dominio
+  if (e instanceof ProductoVencidoError) return errorConflicto("PRODUCTO_VENCIDO", 422)
+  if (e instanceof LoteInvalidoError) return errorConflicto("LOTE_INVALIDO", 422, e.message)
   if (e instanceof StockNegativoError) return errorPeticion("STOCK_NEGATIVO")
   if (e instanceof UsarAjusteStockError) return errorPeticion("USAR_AJUSTE_STOCK")
   if (e instanceof CodigoBarrasInvalidoError) return errorPeticion("CODIGO_BARRAS_INVALIDO")

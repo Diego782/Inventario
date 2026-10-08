@@ -5,7 +5,7 @@ import { ok, errorValidacion } from "@/lib/api/respuestas"
 import { mapPrismaError } from "@/lib/api/errores"
 import { listarNotifQuerySchema } from "@/lib/schemas/notificaciones"
 import { resolverContexto } from "@/lib/auth/contexto-request"
-import { generarNotificacionesVencimiento } from "@/lib/dominio/notificaciones"
+import { generarNotificacionesVencimiento, generarNotificacionesVencimientoProducto } from "@/lib/dominio/notificaciones"
 
 // Máximo de notificaciones devueltas por solicitud (R8.1).
 const LIMITE_NOTIFICACIONES = 100
@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
     // para no degradar el listado por un error en la generación.
     try {
       await generarNotificacionesVencimiento(orgId)
+      await generarNotificacionesVencimientoProducto(orgId)
     } catch {
       // No propagar: el listado sigue siendo válido aunque falle la generación.
     }

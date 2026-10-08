@@ -12,6 +12,7 @@ import {
   TallaInvalidaError,
   PrecioVarianteInvalidoError,
   StockMinimoVarianteInvalidoError,
+  LoteInvalidoError,
   UsarAjusteStockError,
 } from "@/lib/api/errores"
 import type { CrearProductoInput, EditarProductoInput, AjusteStockInput } from "@/lib/schemas/producto"
@@ -19,6 +20,7 @@ import type { Producto, MovimientoStock } from "@prisma/client"
 import { detectarStockCritico, detectarStockCero, estadoStock } from "@/lib/dominio/notificaciones"
 import { redondearBancario } from "@/lib/money"
 import { precioCompraEfectivo, precioEfectivo } from "@/lib/precio-variantes"
+import { asignarLotesExistentes, crearLotesIniciales } from "@/lib/dominio/lotes"
 
 // ---- Helpers ----
 
@@ -95,7 +97,11 @@ export async function crearProducto(input: CrearProductoInput, organizacion_id: 
         + (index < (input.stock_minimo ?? 0) % todas.length ? 1 : 0))
     : []
 
-  return prisma.producto.create({
+  if (!input.controla_vencimiento && input.lotes_iniciales?.length) {
+    throw new LoteInvalidoError("Activa el control de vencimiento para registrar lotes.")
+  }
+  return prisma.$transaction(async (tx) => {
+  const producto = await tx.producto.create({
     data: {
       codigo_barras: codigoBarras,
       nombre: input.nombre,
@@ -107,6 +113,7 @@ export async function crearProducto(input: CrearProductoInput, organizacion_id: 
         ? Math.min(...input.variantes_stock!.map((v) => v.precio_venta!))
         : input.precio_venta,
       precio_por_variante: input.precio_por_variante ?? false,
+      controla_vencimiento: input.controla_vencimiento ?? false,
       stock_actual: stockTotal,
       stock_minimo: tieneVariantes
         ? minimosVariantes.reduce((sum, minimo) => sum + minimo, 0)
@@ -127,6 +134,11 @@ export async function crearProducto(input: CrearProductoInput, organizacion_id: 
       }),
     },
     include: { variantes: true },
+  })
+  if (input.controla_vencimiento) {
+    await crearLotesIniciales(tx, producto, organizacion_id, input.lotes_iniciales ?? [])
+  }
+  return producto
   })
 }
 
@@ -152,6 +164,10 @@ export async function editarProducto(
       include: { variantes: true },
     })
     if (!existente) throw new ProductoNoEncontradoError()
+    if (input.controla_vencimiento === false && existente.controla_vencimiento) {
+      const lotesConStock = await tx.loteProducto.count({ where: { producto_id: id, stock_actual: { gt: 0 } } })
+      if (lotesConStock) throw new LoteInvalidoError("Descarta o vende el stock de los lotes antes de desactivar el vencimiento.")
+    }
 
     let preciosActualizados: Array<{ variante_id: string; precio_compra: number; precio_venta: number }> | undefined
     if (input.precio_por_variante === true || input.precios_variantes !== undefined) {
@@ -185,7 +201,7 @@ export async function editarProducto(
     }
 
     let minimoTotal: number | undefined
-    if (input.minimos_variantes !== undefined) {
+    if (input.minimos_variantes !== undefined && existente.variantes.length > 0) {
       const minimos = input.minimos_variantes
       const ids = new Set(minimos.map((m) => m.variante_id))
       if (
@@ -213,7 +229,7 @@ export async function editarProducto(
       minimoTotal = input.stock_minimo
     }
 
-    return tx.producto.update({
+    const actualizado = await tx.producto.update({
       where: { id },
       data: {
       ...(input.codigo_barras != null && input.codigo_barras !== "" && { codigo_barras: input.codigo_barras }),
@@ -226,6 +242,7 @@ export async function editarProducto(
         ? { precio_venta: Math.min(...preciosActualizados.map((p) => p.precio_venta)) }
         : input.precio_venta !== undefined && { precio_venta: input.precio_venta }),
       ...(input.precio_por_variante !== undefined && { precio_por_variante: input.precio_por_variante }),
+      ...(input.controla_vencimiento !== undefined && { controla_vencimiento: input.controla_vencimiento }),
       ...(minimoTotal !== undefined
         ? { stock_minimo: minimoTotal }
         : input.stock_minimo !== undefined && { stock_minimo: input.stock_minimo }),
@@ -234,6 +251,10 @@ export async function editarProducto(
       },
       include: { variantes: true },
     })
+    if (input.lotes_asignacion?.length) {
+      await asignarLotesExistentes(tx, id, organizacion_id, input.lotes_asignacion)
+    }
+    return actualizado
   })
 }
 
@@ -298,6 +319,9 @@ export async function ajustarStock(
   return prisma.$transaction(async (tx) => {
     const producto = await tx.producto.findFirst({ where: { id, organizacion_id } })
     if (!producto) throw new ProductoNoEncontradoError()
+    if (producto.controla_vencimiento) {
+      throw new LoteInvalidoError("Registra entradas y descartes desde los lotes de vencimiento.")
+    }
 
     // Calcular delta según tipo
     const esEntrada = ["entrada", "devolucion"].includes(input.tipo)

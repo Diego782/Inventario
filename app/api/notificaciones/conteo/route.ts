@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db"
 import { ok } from "@/lib/api/respuestas"
 import { mapPrismaError } from "@/lib/api/errores"
 import { resolverContexto } from "@/lib/auth/contexto-request"
+import { generarNotificacionesVencimientoProducto } from "@/lib/dominio/notificaciones"
 
 export async function GET(): Promise<Response> {
   const resultado = await resolverContexto("requiere-organizacion")
@@ -17,6 +18,7 @@ export async function GET(): Promise<Response> {
   const orgId = resultado.ctx.organizacionActiva!.id
 
   try {
+    try { await generarNotificacionesVencimientoProducto(orgId) } catch { /* El conteo sigue disponible. */ }
     const conteo = await prisma.notificacion.count({
       where: { organizacion_id: orgId, leida: false },
     })
